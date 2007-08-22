@@ -12,6 +12,9 @@ import urllib
 import logging
 import zipfile
 
+from cStringIO import StringIO
+from xml.etree import ElementTree
+
 import bugz
 
 log = logging.getLogger("ktasks")
@@ -23,8 +26,14 @@ class TicketError(Error):
     pass
 
 class UnknowTicket:
-
     pass
+
+
+class Config:
+
+    def __init__(self, options, args):
+        self.options = options
+        self.args = args
 
 
 class TicketCache:
@@ -65,15 +74,17 @@ class CVESource:
 
     def _get_xml(self, cveid):
         path = self._get_path(cveid)
-        xml = self._zipfile.read(path)
+        raw = self._zipfile.read(path)
+        xml = ElementTree.parse(StringIO(raw))
         return xml
 
     def _get_cve_from_xml(self, xml):
         return CVE.from_mitre_xml(xml)
 
-    def get_cve(self, cveid):
+    def get(self, cveid):
         xml = self._get_xml(cveid)
         cve = self._get_cve_from_xml(xml)
+        return cve
 
 
 class CVE:
@@ -84,6 +95,7 @@ class CVE:
     cveid = None
     references = None
     description = None
+    status = None
     phase = None
 
     def __init__(self, cveid):
@@ -94,6 +106,12 @@ class CVE:
         root = xml.getroot()
         cveid = root.attrib["name"]
         cve = CVE(cveid) #FIXME we already have cveid!
+        node = root.find(".//status")
+        if node is not None: # damn bool()!
+            cve.status = node.text
+        node = root.find(".//phase")
+        if node is not None:
+            cve.phase = node.text
         cve.description = root.find(".//desc").text
         cve.references = [{
                 "source": ref.attrib.get("source"),
@@ -101,31 +119,45 @@ class CVE:
                 "descr": ref.text }
             for ref in root.findall(".//refs/ref")]
         # don't parse comments, as apparently we wont' need them
-        cve.phase = root.find(".//phase").text
         return cve
 
 
-class SecurityTicket(Ticket):
-
+class SecurityTicket:
+    """Specialized wrapper for the bugz.Ticket class.
+    
+    It provides all the CVE related data from one ordinary ticket.
+    """
+    
+    _ticket = None
     cve = None
-    url = None
     valid = None
     release_status = None
 
-    def __init__(self, ):
-        Ticket.__init__(self, *args, **kwargs)
-        self._parse_ticket()
+    def __init__(self, ticket, cvesource):
+        self._ticket = ticket
+        self._parse_ticket(cvesource)
 
-    def _parse_ticket(self):
+    def _parse_ticket(self, cvesource):
         #TODO move this regexp to configuration
-        cvere = r"SECURITY\s+ADVISORY:?\s+(?P<cve>CVE-....-....)"
-        found = re.match(cvere, self.title)
+        cvere = r"SECURITY +ADVISORY:? +(?P<cve>CVE-....-....)"
+        found = re.search(cvere, self.title)
         if found is None:
             raise TicketError, "bad ticket title: %r, must match %s" % \
                     (self.title, cvere)
         self.cveid = found.group("cve")
-        self.
-
+        self.cve = cvesource.get(cveid)
+        self.release_status = []
+        # example: "CS3.0: INVALID | 2006.0: OPEN | 2007.0: FIXED"
+        expr = r"^ *([^ :]+): *([A-Z]+)(?: *\| *([^ ]+): *([A-Z]+))*$"
+        statusre = re.compile(expr, re.MULTILINE)
+        for comment in self.comments:
+            found = statusre.search(comment["what"])
+            if found:
+                line = found.group()
+                pairs = line.split("|")
+                status = [(k.strip(), v.strip()) for k, v in
+                        pairs.split(":")]
+                self.release_status.append(status)
 
     def __getattr__(self, name):
         return getattr(self._ticket, name)
@@ -133,16 +165,17 @@ class SecurityTicket(Ticket):
 
 class TicketSource:
 
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, cvesource, base="https://qa.mandriva.com"):
+        self._bugz = bugz.Bugz(base, always_auth=True)
 
-    def search(self, ):
-        pass
+    def search(self, query):
+        found = self._bugz.search(query)
+        for entry in found:
+            bugid = entry["bugid"]
+            ticket = self._bugz.get(bugid)
+            yield ticket
 
-    def _make_ticket(self):
-        pass
-
-    def _get_security_tickets(self):
+    def security_tickets(self):
         for ticket in self.search("ADVISORY:"):
             yield SecurityTicket(ticket)
 
@@ -152,27 +185,28 @@ class KTasks:
     def __init__(self, options, config):
         self.options = options
         self.config = config
+        self.cvesource = CVESource(options.cve_source)
+        self.ticketsource = TicketSource(self.cvesource)
 
     def easy_tickets(self):
-        for ticket in self._get_security_tickets():
+        for ticket in self.ticketsource.security_tickets():
             pass
-
-    def _get_security_tickets(self):
-        pass
 
 def parse_options(args):
     parser = optparse.OptionParser("ktasks")
     parser.add_option("-e", "--easy-tickets", action="store_true",
             default=False, help="show easy to fix tickets")
+    parser.add_options("--cve-source", type="string",
+            default="/home/bogdano/teste/kernel/CVEs/database/tree.zip",
+            help="the zip archive containing all the CVEs")
     parsed = parser.parse_args(args)
     return parsed
 
 def main(args):
     options, args = parse_options(args)
-
+    config = Config(options)
+    ktasks = KTasks(options)
     if options.easy_tickets:
-        pass
-    elif:
         pass
 
 if __name__ == "__main__":
