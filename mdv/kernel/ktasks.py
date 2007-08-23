@@ -25,7 +25,7 @@ class Error(Exception):
 class TicketError(Error):
     pass
 
-class UnknowTicket:
+class UnknownTicket:
     pass
 
 
@@ -40,20 +40,34 @@ class TicketCache:
 
     def __init__(self, path):
         self.path = path
-        self._load()
+        self._shelf = None
+        self._cache = {}
+        self.load()
 
     def load(self):
-        pass
+        log.info("opening shelf at %s" % self.path)
+        self._shelf = shelve.open(self.path)
 
-    def get_ticket(self, number):
-        raise UnknowTicket
+    def get(self, bugid):
+        try:
+            return self._cache[bugid]
+        except KeyError:
+            try:
+                ticket = self._shelf[bugid]
+                self._cache[bugid] = ticket
+                log.info("ticket cache hit for %s" % bugid)
+                return ticket
+            except KeyError:
+                log.info("ticket cache miss for %s"  % bugid)
+                raise UnknownTicket
 
-    def add_ticket(self, ticket):
-        pass
+    def add(self, ticket):
+        self._shelf[ticket.bugid] = ticket
+        self._shelf.sync()
+        self._cache[ticket.bugid] = ticket
 
-    def save(self):
-        pass
-
+    def close(self):
+        self._shelf.close()
 
 def fetch_url(url):
     """Small layer just to allow further enhacements"""
@@ -129,8 +143,8 @@ class SecurityTicket:
     """
     
     _ticket = None
+    cveid = None
     cve = None
-    valid = None
     release_status = None
 
     def __init__(self, ticket, cvesource):
@@ -145,7 +159,7 @@ class SecurityTicket:
             raise TicketError, "bad ticket title: %r, must match %s" % \
                     (self.title, cvere)
         self.cveid = found.group("cve")
-        self.cve = cvesource.get(cveid)
+        self.cve = cvesource.get(self.cveid)
         self.release_status = []
         # example: "CS3.0: INVALID | 2006.0: OPEN | 2007.0: FIXED"
         expr = r"^ *([^ :]+): *([A-Z]+)(?: *\| *([^ ]+): *([A-Z]+))*$"
@@ -155,8 +169,8 @@ class SecurityTicket:
             if found:
                 line = found.group()
                 pairs = line.split("|")
-                status = [(k.strip(), v.strip()) for k, v in
-                        pairs.split(":")]
+                status = dict((k.strip(), v.strip()) for k, v in
+                    (pair.split(":") for pair in pairs))
                 self.release_status.append(status)
 
     def __getattr__(self, name):
@@ -165,19 +179,29 @@ class SecurityTicket:
 
 class TicketSource:
 
-    def __init__(self, cvesource, base="https://qa.mandriva.com"):
+    def __init__(self, cvesource, cachepath, base="https://qa.mandriva.com"):
+        self.cvesource = cvesource
         self._bugz = bugz.Bugz(base, always_auth=True)
+        self._cache = TicketCache(cachepath)
 
     def search(self, query):
         found = self._bugz.search(query)
         for entry in found:
             bugid = entry["bugid"]
-            ticket = self._bugz.get(bugid)
+            ticket = self.get(bugid)
             yield ticket
 
     def security_tickets(self):
         for ticket in self.search("ADVISORY:"):
-            yield SecurityTicket(ticket)
+            yield SecurityTicket(ticket, self.cvesource)
+
+    def get(self, bugid):
+        try:
+            return self._cache.get(bugid)
+        except UnknownTicket:
+            ticket = self._bugz.get(bugid)
+            self._cache.add(ticket)
+            return ticket
 
 
 class KTasks:
@@ -186,7 +210,8 @@ class KTasks:
         self.options = options
         self.config = config
         self.cvesource = CVESource(options.cve_source)
-        self.ticketsource = TicketSource(self.cvesource)
+        self.ticketsource = TicketSource(self.cvesource,
+                config.ticket_cache)
 
     def easy_tickets(self):
         for ticket in self.ticketsource.security_tickets():
@@ -199,6 +224,9 @@ def parse_options(args):
     parser.add_options("--cve-source", type="string",
             default="/home/bogdano/teste/kernel/CVEs/database/tree.zip",
             help="the zip archive containing all the CVEs")
+    parser.add_options("--ticket-cache", type="string",
+            default="/home/bogdano/teste/kernel/CVEs/database/ticket-cache.shelf",
+            help="shelve store containing a local tickets cache")
     parsed = parser.parse_args(args)
     return parsed
 
