@@ -148,6 +148,7 @@ class CVESource:
     def __init__(self, dbpath):
         self.root = "./tree"
         self.dbpath = dbpath
+        log.info("opening cve archive at %s" % self.dbpath)
         self._zipfile = zipfile.ZipFile(dbpath, "r")
 
     def _get_path(self, cveid):
@@ -156,6 +157,7 @@ class CVESource:
 
     def _get_xml(self, cveid):
         path = self._get_path(cveid)
+        log.info("retrieving %s at %s in archive" % (cveid, path))
         raw = self._zipfile.read(path)
         xml = ElementTree.parse(StringIO(raw))
         return xml
@@ -299,6 +301,7 @@ def parse_options(args):
     parser.set_defaults(config_options={})
     parser.add_option("-e", "--easy-tickets", action="store_true",
             default=False, help="show easy to fix tickets")
+    parser.add_option("-v", "--verbose", action="store_true", default=True)
     parser.add_option("-o", "--option", type="string", action="callback",
             callback=parse_option,
             help="set one configuration option in the form opt=val")
@@ -307,6 +310,8 @@ def parse_options(args):
 
 def main():
     options, args = parse_options(sys.argv)
+    if options.verbose:
+        logging.basicConfig(level=logging.DEBUG)
     config = Config()
     config.merge(options.config_options)
     path = (os.environ.get(config.conf.path_environment) or
