@@ -359,6 +359,8 @@ def main():
     options, args = parse_options(sys.argv)
     if options.verbose:
         logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.ERROR)
     config = Config()
     config.merge(options.config_options)
     path = (os.environ.get(config.conf.path_environment) or
