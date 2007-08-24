@@ -21,6 +21,7 @@ import yaml
 import bugz
 
 CONFIG_DEFAULTS = """\
+cve_source: data/cve.zip
 conf:
     path_environment: KTASKS_CONF
     user_file: .ktasks
@@ -272,10 +273,9 @@ class TicketSource:
 
 class KTasks:
 
-    def __init__(self, options, config):
-        self.options = options
+    def __init__(self, config):
         self.config = config
-        self.cvesource = CVESource(options.cve_source)
+        self.cvesource = CVESource(config.cve_source)
         self.ticketsource = TicketSource(self.cvesource,
                 config.ticket_cache)
 
