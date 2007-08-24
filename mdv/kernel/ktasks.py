@@ -23,6 +23,7 @@ import bugz
 CONFIG_DEFAULTS = """\
 cve_source: data/cve.zip
 ticket_cache: data/ticket-cache.shelve
+bugzilla_base_url: https://qa.mandriva.com
 conf:
     path_environment: KTASKS_CONF
     user_file: .ktasks
@@ -254,7 +255,7 @@ class SecurityTicket:
 
 class TicketSource:
 
-    def __init__(self, cvesource, cachepath, base="https://qa.mandriva.com"):
+    def __init__(self, cvesource, cachepath, base):
         self.cvesource = cvesource
         self._bugz = bugz.Bugz(base, always_auth=True)
         self._cache = TicketCache(cachepath)
@@ -288,7 +289,7 @@ class KTasks:
         self.config = config
         self.cvesource = CVESource(config.cve_source)
         self.ticketsource = TicketSource(self.cvesource,
-                config.ticket_cache)
+                config.ticket_cache, config.bugzilla_base_url)
 
     def easy_tickets(self):
         for ticket in self.ticketsource.security_tickets():

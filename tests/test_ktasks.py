@@ -21,12 +21,14 @@ class TestKtasks(KTasksTest):
 
     cachefile = os.path.join(KTasksTest.workdir, "ticket-cache.shelf")
     cve_archive = "/home/bogdano/teste/kernel/CVEs/database/tree.zip"
+    bugzilla_base_url = "https://qa.mandriva.com"
 
     def _get_cve_source(self):
         return ktasks.CVESource(self.cve_archive)
 
     def _get_ticket_source(self, cvesource):
-        return ktasks.TicketSource(cvesource, self.cachefile)
+        return ktasks.TicketSource(cvesource, self.cachefile,
+                self.bugzilla_base_url)
 
     def test_cve_source(self):
         source = ktasks.CVESource(self.cve_archive)
