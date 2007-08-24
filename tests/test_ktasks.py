@@ -207,5 +207,23 @@ nada:
         self.assertEqual(config.nada.nadar, ["nadador", "nadando"])
         self.assertEqual(config.nada.vazio, ["esvaziar", "vazar"])
 
+    def test_mergeconf(self):
+        base = {"one": "two", 
+                "three": ["3.1", "3.2", "3.3"],
+                "four": {"item": "value", "foo": "bar"},
+                "misc": 1}
+        other = {"bla": "bleh",
+                 "three": ["3.4!"],
+                 "four": {"new": "item"},
+                 "misc": 3}
+        new = ktasks.mergeconf(base, other)
+        self.assertEqual(new["one"], "two")
+        self.assertEqual(new["three"], ["3.1", "3.2", "3.3", "3.4!"])
+        self.assertEqual(new["four"], {"item": "value", "foo": "bar",
+            "new": "item"})
+        self.assertEqual(new["misc"], 3)
+        self.assertEqual(new["bla"], "bleh")
+
+
 if __name__ == "__main__":
     unittest.main()

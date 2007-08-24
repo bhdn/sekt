@@ -53,7 +53,7 @@ def mergeconf(base, another):
             else:
                 merged[k] = mergeconf(basev, v)
     elif baset is list:
-        merged = another[::]
+        merged = base[::]
         merged.extend(another)
     return merged
 
