@@ -304,7 +304,6 @@ class KTasks:
                 config.ticket_cache, config.bugzilla_base_url)
 
     def easy_tickets(self):
-        import pdb; pdb.set_trace()
         for ticket in self.ticketsource.security_tickets():
             pass
 
@@ -327,7 +326,7 @@ def parse_options(args):
     parser.set_defaults(config_options={})
     parser.add_option("-e", "--easy-tickets", action="store_true",
             default=False, help="show easy to fix tickets")
-    parser.add_option("-v", "--verbose", action="store_true", default=True)
+    parser.add_option("-v", "--verbose", action="store_true", default=False)
     parser.add_option("-o", "--option", type="string", action="callback",
             callback=parse_option,
             help="set one configuration option in the form opt=val")
