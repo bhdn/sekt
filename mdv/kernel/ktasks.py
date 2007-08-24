@@ -22,6 +22,7 @@ import bugz
 
 CONFIG_DEFAULTS = """\
 cve_source: data/cve.zip
+ticket_cache: data/ticket-cache.shelve
 conf:
     path_environment: KTASKS_CONF
     user_file: .ktasks
