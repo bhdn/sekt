@@ -303,8 +303,8 @@ def parse_options(args):
     parsed = parser.parse_args(args)
     return parsed
 
-def main(args):
-    options, args = parse_options(args)
+def main():
+    options, args = parse_options(sys.argv)
     config = Config()
     config.merge(options.config_options)
     path = (os.environ(config.conf.path_environment) or
@@ -315,4 +315,4 @@ def main(args):
         pass
 
 if __name__ == "__main__":
-    main(sys.argv)
+    main()
