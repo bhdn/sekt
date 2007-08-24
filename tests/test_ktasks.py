@@ -27,8 +27,9 @@ class TestKtasks(KTasksTest):
         return ktasks.CVESource(self.cve_archive)
 
     def _get_ticket_source(self, cvesource):
+        config = ktasks.Config()
         return ktasks.TicketSource(cvesource, self.cachefile,
-                self.bugzilla_base_url)
+                self.bugzilla_base_url, config)
 
     def test_cve_source(self):
         source = ktasks.CVESource(self.cve_archive)
@@ -62,8 +63,25 @@ class TestKtasks(KTasksTest):
         #TODO move to setUp
         cvesource = self._get_cve_source()
         ticketsource = self._get_ticket_source(cvesource)
+        # check release status matching
+        config = ktasks.Config(defaults={"cve": {"valid_status": ["FOO",
+            "BAR", "BAZ"]}})
+        comments = [
+            {"who": "me", "when": "never", "what": """
+This is a simple note on top of the status bar.
+
+2006.0: FOO | 2007.0: FOO | 2008.0: BAR"""},
+            {"who": "me", "when": "tomorrow", "what": """\
+FOO: bli | bla: ZZZ
+"""}]
+        release_status = ktasks.SecurityTicket._find_release_status(config,
+                comments)
+        self.assertTrue(release_status, [{"2006.0": "FOO", "2007.0": "FOO",
+            "2008.0": "BAR"}])
+        # check ticket wrapping
         ticket = ticketsource.get("27958")
-        secticket = ktasks.SecurityTicket(ticket, cvesource)
+        secticket = ktasks.SecurityTicket(ticket, cvesource,
+                ktasks.Config())
         self.assertEqual(secticket.title, ticket.title)
         self.assertEqual(secticket.assignee, ticket.assignee)
         self.assertEqual(secticket.cc, ticket.cc)

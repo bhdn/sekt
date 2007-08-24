@@ -24,6 +24,14 @@ CONFIG_DEFAULTS = """\
 cve_source: data/cve.zip
 ticket_cache: data/ticket-cache.shelve
 bugzilla_base_url: https://qa.mandriva.com
+cve:
+    valid_status:
+        - OPEN
+        - NEW
+        - INVALID
+        - FIXED
+        - RELEASED
+        - WONTFIX
 conf:
     path_environment: KTASKS_CONF
     user_file: .ktasks
@@ -226,11 +234,11 @@ class SecurityTicket:
     cve = None
     release_status = None
 
-    def __init__(self, ticket, cvesource):
+    def __init__(self, ticket, cvesource, config):
         self._ticket = ticket
-        self._parse_ticket(cvesource)
+        self._parse_ticket(cvesource, config)
 
-    def _parse_ticket(self, cvesource):
+    def _parse_ticket(self, cvesource, config):
         #TODO move this regexp to configuration
         cvere = r"SECURITY +ADVISORY:? +(?P<cve>(?P<kind>CVE|CAN)-....-....)"
         found = re.search(cvere, self.title)
@@ -244,18 +252,25 @@ class SecurityTicket:
             raise CANTicket
         self.cveid = found.group("cve")
         self.cve = cvesource.get(self.cveid)
-        self.release_status = []
+        self.release_status = self._find_release_status(config, self.comments)
+
+    @classmethod
+    def _find_release_status(klass, config, comments):
         # example: "CS3.0: INVALID | 2006.0: OPEN | 2007.0: FIXED"
-        expr = r"(?P<line>[^\s:]+: [A-Z]+(?: \| [^ ]+: [A-Z]+)*)"
+        release_status = []
+        valid = "|".join(config.cve.valid_status)
+        expr = r"(?P<line>[^\s:]+: (?:%s)(?: \| [^ ]+: (?:%s))*)" % (valid,
+                valid)
         statusre = re.compile(expr)
-        for comment in self.comments:
+        for comment in comments:
             found = statusre.search(comment["what"])
             if found:
                 line = found.group()
                 pairs = line.split("|")
                 status = dict((k.strip(), v.strip()) for k, v in
                     (pair.split(":") for pair in pairs))
-                self.release_status.append(status)
+                release_status.append(status)
+        return release_status
 
     def __getattr__(self, name):
         return getattr(self._ticket, name)
@@ -263,10 +278,11 @@ class SecurityTicket:
 
 class TicketSource:
 
-    def __init__(self, cvesource, cachepath, base):
+    def __init__(self, cvesource, cachepath, base, config):
         self.cvesource = cvesource
         self._bugz = bugz.Bugz(base, always_auth=True)
         self._cache = TicketCache(cachepath)
+        self.config = config
 
     def search(self, query):
         found = self._bugz.search(query)
@@ -278,7 +294,7 @@ class TicketSource:
     def security_tickets(self):
         for ticket in self.search("ADVISORY:"):
             try:
-                yield SecurityTicket(ticket, self.cvesource)
+                yield SecurityTicket(ticket, self.cvesource, self.config)
             except CANTicket:
                 log.warn("can't parse CAN entry from ticket %s, "\
                         "skipping it" % ticket.bugid)
@@ -307,7 +323,7 @@ class KTasks:
         self.config = config
         self.cvesource = CVESource(config.cve_source)
         self.ticketsource = TicketSource(self.cvesource,
-                config.ticket_cache, config.bugzilla_base_url)
+                config.ticket_cache, config.bugzilla_base_url, config)
 
     def easy_tickets(self):
         """Points those tickets that (apparently) can be easily fixed.
