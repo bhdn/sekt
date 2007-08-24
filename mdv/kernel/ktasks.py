@@ -135,6 +135,7 @@ class TicketCache:
         self._cache[ticket.bugid] = ticket
 
     def close(self):
+        log.debug("closing TicketCache at %s" % self.path)
         self._shelf.close()
 
 def fetch_url(url):
@@ -169,6 +170,10 @@ class CVESource:
         xml = self._get_xml(cveid)
         cve = self._get_cve_from_xml(xml)
         return cve
+
+    def close(self):
+        log.debug("closing cve archive at %s" % self.dbpath)
+        self._zipfile.close()
 
 
 class CVE:
@@ -273,6 +278,9 @@ class TicketSource:
             self._cache.add(ticket)
             return ticket
 
+    def close(self):
+        self._cache.close()
+
 
 class KTasks:
 
@@ -285,6 +293,10 @@ class KTasks:
     def easy_tickets(self):
         for ticket in self.ticketsource.security_tickets():
             pass
+
+    def finish(self):
+        self.cvesource.close()
+        self.ticketsource.close()
 
 def parse_options(args):
     def parse_option(option, opt_str, value, parser, *args, **kwargs):
@@ -319,8 +331,11 @@ def main():
     if os.path.exists(path):
         config.load(path)
     ktasks = KTasks(config)
-    if options.easy_tickets:
-        pass
+    try:
+        if options.easy_tickets:
+            pass
+    finally:
+        ktasks.finish()
 
 if __name__ == "__main__":
     main()
