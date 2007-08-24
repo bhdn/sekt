@@ -4,10 +4,22 @@ import unittest
 
 from mdv.kernel import ktasks
 
-class TestKtasks(unittest.TestCase):
+class KTasksTest(unittest.TestCase):
 
     workdir = "tests/data/"
-    cachefile = os.path.join(workdir, "ticket-cache.shelf")
+
+    def setUp(self):
+        if not os.path.exists(self.workdir):
+            os.makedirs(self.workdir)
+
+    def tearDown(self):
+        if os.path.exists(self.workdir):
+            shutil.rmtree(self.workdir)
+
+
+class TestKtasks(KTasksTest):
+
+    cachefile = os.path.join(KTasksTest.workdir, "ticket-cache.shelf")
     cve_archive = "/home/bogdano/teste/kernel/CVEs/database/tree.zip"
 
     def _get_cve_source(self):
@@ -106,13 +118,68 @@ class TestKtasks(unittest.TestCase):
         self.assertEqual(items[2].title, items3[2].title)
         self.assertEqual(items[2].comments, items3[2].comments)
 
-    def setUp(self):
-        if not os.path.exists(self.workdir):
-            os.makedirs(self.workdir)
 
-    def tearDown(self):
-        if os.path.exists(self.cachefile):
-            shutil.rmtree(cachefile)
+class TestConfig(KTasksTest):
+
+    defaults = """\
+foo: bar
+bar: baz
+baz: bleh
+bli:
+    - bla
+    - blou
+    - zha!
+yat:
+    yot:
+        - yut
+        - bla
+        - bli
+    you:
+        - kkk
+        - kekeke
+        - kikiki
+"""
+
+    def test_cli_option(self):
+        config = ktasks.Config(defaults={})
+        config.parse(self.defaults)
+        args = ["-o", "xi=xar", "-o", "iut=iar", "-o", "yet=yot=yat",
+                "-o", "yat.yar=heia!"]
+        options, args = ktasks.parse_options(args)
+        config.merge(options.config_options)
+        self.assertEqual(config.xi, "xar")
+        self.assertEqual(config.iut, "iar")
+        self.assertEqual(config.yet, "yot=yat")
+        self.assertEqual(config.yat.yar, "heia!")
+
+    def _check_defaults(self, config):
+        self.assertEqual(config.foo, "bar")
+        self.assertEqual(config["foo"], "bar")
+        self.assertEqual(config.bar, "baz")
+        self.assertEqual(config.baz, "bleh")
+        self.assertEqual(config.bli, ["bla", "blou", "zha!"])
+        self.assertEqual(config["bli"], ["bla", "blou", "zha!"])
+        self.assertTrue(isinstance(config.yat, ktasks.ConfWrapper))
+        self.assertEqual(config.yat.yot, ["yut", "bla", "bli"])
+        self.assertEqual(config.yat.you, ["kkk", "kekeke", "kikiki"])
+        self.assertEqual(config["yat"],
+                {"yot": ["yut", "bla", "bli"],
+                 "you": ["kkk", "kekeke", "kikiki"]})
+
+    def test_parsing_yaml(self):
+        config = ktasks.Config(defaults={})
+        config.parse(self.defaults)
+        self._check_defaults(config)
+
+    def test_parsing_file(self):
+        path = os.path.join(self.workdir, "sample.conf")
+        f = open(path, "w+")
+        f.write(self.defaults)
+        f.close()
+        config = ktasks.Config(defaults={})
+        config.load(path)
+        self._check_defaults(config)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,7 +15,16 @@ import zipfile
 from cStringIO import StringIO
 from xml.etree import ElementTree
 
+# external deps:
+
+import yaml
 import bugz
+
+CONFIG_DEFAULTS = """\
+conf:
+    path_environment: KTASKS_CONF
+    user_file: .ktasks
+"""
 
 log = logging.getLogger("ktasks")
 
@@ -29,11 +38,67 @@ class UnknownTicket:
     pass
 
 
-class Config:
+def mergeconf(base, another):
+    baset = type(base)
+    merged = another
+    if baset is dict:
+        merged = base.copy()
+        for k, v in another.iteritems():
+            try:
+                basev = base[k]
+            except KeyError:
+                merged[k] = v
+            else:
+                merged[k] = mergeconf(basev, v)
+    elif baset is list:
+        merged = another[::]
+        merged.extend(another)
+    return merged
 
-    def __init__(self, options, args):
-        self.options = options
-        self.args = args
+
+class ConfWrapper:
+
+    _conf = None
+    
+    def __init__(self, conf):
+        self._conf = conf
+
+    def __getattr__(self, name):
+        val = self._conf[name]
+        if type(val) is dict:
+            return ConfWrapper(val)
+        return val
+
+    def __getitem__(self, name):
+        return self._conf[name]
+
+
+class Config(ConfWrapper):
+
+    _conf = None
+    defaults = CONFIG_DEFAULTS
+    options = None
+    args = None
+
+    def __init__(self, defaults=None):
+        if defaults is None:
+            defaults = self.defaults
+        self._conf = self.merge(defaults)
+
+    def merge(self, data):
+        self._conf = mergeconf(self._conf, data)
+
+    def parse(self, raw):
+        data = yaml.load(raw)
+        self.merge(data)
+
+    def load(self, path):
+        """Load the configuration file in the given path"""
+        raw = open(path).read()
+        self.parse(raw)
+
+    def __repr__(self):
+        return "<Config %s>" % self._conf
 
 
 class TicketCache:
@@ -218,22 +283,34 @@ class KTasks:
             pass
 
 def parse_options(args):
+    def parse_option(option, opt_str, value, parser, *args, **kwargs):
+        kv = value.split("=", 1)
+        if len(kv) != 2:
+           raise optparse.OptionValueError, "-o accepts values only in "\
+                   "the name=value form"
+        levels = kv[0].split(".")
+        lastv = kv[1]
+        for name in levels[:0:-1]:
+            lastv = {name: lastv}
+        parser.values.config_options[levels[0]] = lastv
     parser = optparse.OptionParser("ktasks")
+    parser.set_defaults(config_options={})
     parser.add_option("-e", "--easy-tickets", action="store_true",
             default=False, help="show easy to fix tickets")
-    parser.add_options("--cve-source", type="string",
-            default="/home/bogdano/teste/kernel/CVEs/database/tree.zip",
-            help="the zip archive containing all the CVEs")
-    parser.add_options("--ticket-cache", type="string",
-            default="/home/bogdano/teste/kernel/CVEs/database/ticket-cache.shelf",
-            help="shelve store containing a local tickets cache")
+    parser.add_option("-o", "--option", type="string", action="callback",
+            callback=parse_option,
+            help="set one configuration option in the form opt=val")
     parsed = parser.parse_args(args)
     return parsed
 
 def main(args):
     options, args = parse_options(args)
-    config = Config(options)
-    ktasks = KTasks(options)
+    config = Config()
+    config.merge(options.config_options)
+    path = (os.environ(config.conf.path_environment) or
+            os.expanduser(os.path.join("~", config.conf.user_file)))
+    config.load(path)
+    ktasks = KTasks(config)
     if options.easy_tickets:
         pass
 
