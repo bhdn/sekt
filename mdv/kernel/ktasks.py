@@ -246,8 +246,8 @@ class SecurityTicket:
         self.cve = cvesource.get(self.cveid)
         self.release_status = []
         # example: "CS3.0: INVALID | 2006.0: OPEN | 2007.0: FIXED"
-        expr = r"^ *([^ :]+): *([A-Z]+)(?: *\| *([^ ]+): *([A-Z]+))*$"
-        statusre = re.compile(expr, re.MULTILINE)
+        expr = r"(?P<line>[^\s:]+: [A-Z]+(?: \| [^ ]+: [A-Z]+)*)"
+        statusre = re.compile(expr)
         for comment in self.comments:
             found = statusre.search(comment["what"])
             if found:
@@ -336,6 +336,18 @@ class KTasks:
                     if reasons:
                         yield (ticket, reasons)
 
+    def status(self):
+        """Shows the status for each ticket, and each distro.
+
+        @return: a sequence of (ticket, last_status) tuples.
+                 last_status being a dict of DISTRO: STATUS pairs.
+        """
+        for ticket in self.ticketsource.security_tickets():
+            if not ticket.release_status:
+                status = None
+            else:
+                status = ticket.release_status[-1]
+            yield (ticket, status)
 
     def finish(self):
         self.cvesource.close()
@@ -352,6 +364,15 @@ class Interface:
             for reason in reasons:
                 if issubclass(reason[0], self.ktasks.Reasons.HasCommits):
                     print "   ", reason[1]
+
+    def status(self):
+        for ticket, status in self.ktasks.status():
+            if status is None:
+                line = "NO STATUS"
+            else:
+                line = " | ".join("%s: %s" % (k, v) for k, v in
+                        status.iteritems())
+            print "%s %s: %s" % (ticket.bugid, ticket.cve.cveid, line)
             
 
 def parse_options(args):
@@ -369,6 +390,8 @@ def parse_options(args):
     parser.set_defaults(config_options={})
     parser.add_option("-e", "--easy-tickets", action="store_true",
             default=False, help="show easy to fix tickets")
+    parser.add_option("-s", "--status", action="store_true", default=False,
+            help="show the status of the tickets for each distro")
     parser.add_option("-v", "--verbose", action="store_true", default=False)
     parser.add_option("-o", "--option", type="string", action="callback",
             callback=parse_option,
@@ -393,6 +416,8 @@ def main():
     try:
         if options.easy_tickets:
             interface.easy_tickets()
+        if options.status:
+            interface.status()
     finally:
         ktasks.finish()
 
