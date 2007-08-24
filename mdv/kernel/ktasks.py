@@ -297,6 +297,10 @@ class TicketSource:
 
 class KTasks:
 
+    class Reasons:
+        class HasCommits:
+            pass
+
     def __init__(self, config):
         self.config = config
         self.cvesource = CVESource(config.cve_source)
@@ -304,12 +308,30 @@ class KTasks:
                 config.ticket_cache, config.bugzilla_base_url)
 
     def easy_tickets(self):
+        gitbase = "git/"
         for ticket in self.ticketsource.security_tickets():
-            pass
+            if ticket.resolution:
+                continue
+            for ref in ticket.cve.references:
+                url = ref.get("url")
+                if url and gitbase in url:
+                    yield (ticket, (self.Reasons.HasCommits, url))
+                    #break # one is enough, for now
 
     def finish(self):
         self.cvesource.close()
         self.ticketsource.close()
+
+class Interface:
+    def __init__(self, config, ktasks):
+        self.config = config
+        self.ktasks = ktasks
+
+    def easy_tickets(self):
+        for ticket, reason in self.ktasks.easy_tickets():
+            if reason[0] is self.ktasks.Reasons.HasCommits:
+                print ticket.bugid, ticket.cve.cveid, reason[1]
+            
 
 def parse_options(args):
     def parse_option(option, opt_str, value, parser, *args, **kwargs):
@@ -344,9 +366,10 @@ def main():
     if os.path.exists(path):
         config.load(path)
     ktasks = KTasks(config)
+    interface = Interface(config, ktasks)
     try:
         if options.easy_tickets:
-            pass
+            interface.easy_tickets()
     finally:
         ktasks.finish()
 
