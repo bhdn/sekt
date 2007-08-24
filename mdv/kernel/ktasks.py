@@ -308,9 +308,10 @@ def main():
     options, args = parse_options(sys.argv)
     config = Config()
     config.merge(options.config_options)
-    path = (os.environ(config.conf.path_environment) or
-            os.expanduser(os.path.join("~", config.conf.user_file)))
-    config.load(path)
+    path = (os.environ.get(config.conf.path_environment) or
+            os.path.expanduser(os.path.join("~", config.conf.user_file)))
+    if os.path.exists(path):
+        config.load(path)
     ktasks = KTasks(config)
     if options.easy_tickets:
         pass
