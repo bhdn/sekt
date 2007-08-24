@@ -40,6 +40,9 @@ class TicketError(Error):
 class UnknownTicket:
     pass
 
+class CANTicket(TicketError):
+    pass
+
 
 def mergeconf(base, another):
     baset = type(base)
@@ -229,11 +232,16 @@ class SecurityTicket:
 
     def _parse_ticket(self, cvesource):
         #TODO move this regexp to configuration
-        cvere = r"SECURITY +ADVISORY:? +(?P<cve>CVE-....-....)"
+        cvere = r"SECURITY +ADVISORY:? +(?P<cve>(?P<kind>CVE|CAN)-....-....)"
         found = re.search(cvere, self.title)
         if found is None:
             raise TicketError, "bad ticket title: %r, must match %s" % \
                     (self.title, cvere)
+        kind = found.group("kind")
+        if kind == "CAN":
+            # exception: we don't have CAN data in our database, complain
+            # about it
+            raise CANTicket
         self.cveid = found.group("cve")
         self.cve = cvesource.get(self.cveid)
         self.release_status = []
@@ -269,7 +277,11 @@ class TicketSource:
 
     def security_tickets(self):
         for ticket in self.search("ADVISORY:"):
-            yield SecurityTicket(ticket, self.cvesource)
+            try:
+                yield SecurityTicket(ticket, self.cvesource)
+            except CANTicket:
+                log.warn("can't parse CAN entry from ticket %s, "\
+                        "skipping it" % ticket.bugid)
 
     def get(self, bugid):
         try:
@@ -292,6 +304,7 @@ class KTasks:
                 config.ticket_cache, config.bugzilla_base_url)
 
     def easy_tickets(self):
+        import pdb; pdb.set_trace()
         for ticket in self.ticketsource.security_tickets():
             pass
 
