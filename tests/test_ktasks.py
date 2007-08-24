@@ -180,6 +180,32 @@ yat:
         config.load(path)
         self._check_defaults(config)
 
+    def test_honor_raw_defaults(self):
+        class NewConfig(ktasks.Config):
+            raw_defaults = """\
+um: dois
+tres: quatro
+cinco: seis
+sete: oito
+isso:
+    - aquilo
+    - outra
+nada:
+    nadar:
+        - nadador
+        - nadando
+    vazio:
+        - esvaziar
+        - vazar
+"""
+        config = NewConfig()
+        self.assertEqual(config.um, "dois")
+        self.assertEqual(config.tres, "quatro")
+        self.assertEqual(config.cinco, "seis")
+        self.assertEqual(config.sete, "oito")
+        self.assertEqual(config.isso, ["aquilo", "outra"])
+        self.assertEqual(config.nada.nadar, ["nadador", "nadando"])
+        self.assertEqual(config.nada.vazio, ["esvaziar", "vazar"])
 
 if __name__ == "__main__":
     unittest.main()

@@ -76,14 +76,15 @@ class ConfWrapper:
 class Config(ConfWrapper):
 
     _conf = None
-    defaults = CONFIG_DEFAULTS
+    raw_defaults = CONFIG_DEFAULTS
     options = None
     args = None
 
     def __init__(self, defaults=None):
         if defaults is None:
-            defaults = self.defaults
-        self._conf = self.merge(defaults)
+            self.parse(self.raw_defaults)
+        else:
+            self.merge(defaults)
 
     def merge(self, data):
         self._conf = mergeconf(self._conf, data)
