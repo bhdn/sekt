@@ -300,6 +300,8 @@ class KTasks:
     class Reasons:
         class HasCommits:
             pass
+        class HasChangeLogEntry(HasCommits):
+            pass
 
     def __init__(self, config):
         self.config = config
@@ -308,15 +310,32 @@ class KTasks:
                 config.ticket_cache, config.bugzilla_base_url)
 
     def easy_tickets(self):
+        """Points those tickets that (apparently) can be easily fixed.
+
+        Those tickets considered "easy" are usually:
+
+        - those that have the git commit URL in the references section of
+          the CVE
+        - or have pointers to the changelog containing the commit (harder
+          to find the right commit)
+
+        @return: generator with tuples of (ticket, [(reason, *args), ...])
+        """
         gitbase = "git/"
         for ticket in self.ticketsource.security_tickets():
             if ticket.resolution:
                 continue
             for ref in ticket.cve.references:
                 url = ref.get("url")
-                if url and gitbase in url:
-                    yield (ticket, (self.Reasons.HasCommits, url))
-                    #break # one is enough, for now
+                if url: 
+                    reasons = []
+                    if gitbase in url:
+                        reasons.append((self.Reasons.HasCommits, url))
+                    if "ChangeLog-2." in url:
+                        reasons.append((self.Reasons.HasChangeLogEntry, url))
+                    if reasons:
+                        yield (ticket, reasons)
+
 
     def finish(self):
         self.cvesource.close()
@@ -328,9 +347,11 @@ class Interface:
         self.ktasks = ktasks
 
     def easy_tickets(self):
-        for ticket, reason in self.ktasks.easy_tickets():
-            if reason[0] is self.ktasks.Reasons.HasCommits:
-                print ticket.bugid, ticket.cve.cveid, reason[1]
+        for ticket, reasons in self.ktasks.easy_tickets():
+            print "%s %s" % (ticket.bugid, ticket.cve.cveid)
+            for reason in reasons:
+                if issubclass(reason[0], self.ktasks.Reasons.HasCommits):
+                    print "   ", reason[1]
             
 
 def parse_options(args):
