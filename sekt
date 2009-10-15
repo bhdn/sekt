@@ -1,5 +1,9 @@
 #!/usr/bin/python
 import sys
+import os
+import optparse
+import logging
+
 from mdv.sec.tasks import Interface, Config, SecteamTasks
 
 def parse_options(args):
@@ -13,13 +17,15 @@ def parse_options(args):
         for name in levels[:0:-1]:
             lastv = {name: lastv}
         parser.values.config_options[levels[0]] = lastv
-    parser = optparse.OptionParser("ktasks")
+    parser = optparse.OptionParser("%prog [options]")
     parser.set_defaults(config_options={})
     parser.add_option("-e", "--easy-tickets", action="store_true",
             default=False, help="show easy to fix tickets")
     parser.add_option("-s", "--status", action="store_true", default=False,
             help="show the status of the tickets for each distro")
     parser.add_option("-v", "--verbose", action="store_true", default=False)
+    parser.add_option("--pull-cves", action="store_true", default=False,
+            help="pull cves from a MITRE's XML text file")
     parser.add_option("-o", "--option", type="string", action="callback",
             callback=parse_option,
             help="set one configuration option in the form opt=val")
@@ -45,6 +51,8 @@ def main():
             interface.easy_tickets()
         if options.status:
             interface.status()
+        if options.pull_cves:
+            interface.pull_cves()
     finally:
         tasks.finish()
 

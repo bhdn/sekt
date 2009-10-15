@@ -21,8 +21,8 @@ import yaml
 import bugz
 
 CONFIG_DEFAULTS = """\
-cve_source: data/cve.zip
-ticket_cache: data/ticket-cache.shelve
+workdir: ~/sekt/ 
+cve_database: cves.bsddb
 bugzilla_base_url: https://qa.mandriva.com
 cve:
     valid_status:
@@ -33,11 +33,11 @@ cve:
         - RELEASED
         - WONTFIX
 conf:
-    path_environment: KTASKS_CONF
-    user_file: .ktasks
+    path_environment: SEKT_CONF
+    user_file: .sekt
 """
 
-log = logging.getLogger("ktasks")
+log = logging.getLogger("sekt")
 
 class Error(Exception):
     pass
@@ -157,7 +157,7 @@ class CVEPool:
 
     def close(self):
         log.debug("closing cve archive at %s" % self.dbpath)
-        self._db.save()
+        self._db.sync()
         self._db.close()
 
 
@@ -263,6 +263,22 @@ class TicketSource:
     def close(self):
         self._cache.close()
 
+class Paths:
+
+    def __init__(self, config):
+        self.config = config
+
+    def _config_path(self, path):
+        return os.path.expanduser(path)
+
+    def _workdir_file(self, name_or_path):
+        return os.path.join(self._config_path(self.config.workdir),
+                self._config_path(name_or_path))
+
+    def cve_database(self, tmp=False):
+        if tmp:
+            return self.cve_database() + ".tmp"
+        return self._workdir_file(self.config.cve_database)
 
 class SecteamTasks:
 
@@ -274,9 +290,26 @@ class SecteamTasks:
 
     def __init__(self, config):
         self.config = config
-        self.cvesource = CVESource(config.cve_source)
-        self.ticketsource = TicketSource(self.cvesource,
+        self.paths = Paths(config)
+        self.cves = None
+        self.tickets = None
+
+    def open_stuff(self):
+        self.cves = CVEPool(paths.cve_database())
+        self.tickets = TicketSource(self.cvesource,
                 config.ticket_cache, config.bugzilla_base_url, config)
+
+    def pull_cves(self, stream):
+        """Pull CVE XMLs from a text stream (usually the one from
+        cve.mitre.org)
+        """
+        from mdv.sec.pullcves import split
+        tmpdest = self.paths.cve_database(tmp=True)
+        if os.path.exists(tmpdest):
+            log.debug("removing %s", tmpdest)
+            os.unlink(tmpdest)
+        split(stream, tmpdest)
+        os.rename(tmpdest, self.paths.cve_database())
 
     def easy_tickets(self):
         """Points those tickets that (apparently) can be easily fixed.
@@ -319,13 +352,15 @@ class SecteamTasks:
             yield (ticket, status)
 
     def finish(self):
-        self.cvesource.close()
-        self.ticketsource.close()
+        if self.cves:
+            self.cves.close()
+        if self.tickets:
+            self.tickets.close()
 
 class Interface:
-    def __init__(self, config, ktasks):
+    def __init__(self, config, tasks):
         self.config = config
-        self.ktasks = ktasks
+        self.tasks = tasks
 
     def easy_tickets(self):
         for ticket, reasons in self.ktasks.easy_tickets():
@@ -342,6 +377,6 @@ class Interface:
                 line = " | ".join("%s: %s" % (k, v) for k, v in
                         status.iteritems())
             print "%s %s: %s" % (ticket.bugid, ticket.cve.cveid, line)
-            
 
-
+    def pull_cves(self):
+        self.tasks.pull_cves(sys.stdin)
