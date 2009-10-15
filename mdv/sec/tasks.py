@@ -120,15 +120,12 @@ class CVEPool:
 
     def __init__(self, dbpath):
         self.dbpath = dbpath
-        log.info("opening cve archive at %s" % self.dbpath)
-        self._db = bsddb.btopen(dbpath)
-
-    def _get_xml(self, cveid):
-        xml = self._db.get(cveid)
-        return xml
+        log.info("opening cve archive at %s", self.dbpath)
+        self._db = shelve.open(dbpath)
 
     @classmethod
-    def _get_cve(klass, xml):
+    def _get_cve(klass, rawxml):
+        xml = ElementTree.parse(StringIO(rawxml))
         root = xml.getroot()
         cveid = root.attrib["name"]
         cve = CVE(cveid) #FIXME we already have cveid!
@@ -148,18 +145,16 @@ class CVEPool:
         return cve
 
     def get(self, cveid):
-        xml = self._get_xml(cveid)
-        cve = self._get_cve(xml)
-        return cve
+        return self._db.get(cveid)
 
-    def put(self, cveid, xml):
-        self._db[cveid] = xml
+    def put_xml(self, xml):
+        cve = self._get_cve(xml)
+        self._db[cve.cveid] = cve
 
     def close(self):
         log.debug("closing cve archive at %s" % self.dbpath)
         self._db.sync()
         self._db.close()
-
 
 class CVE:
 
@@ -308,7 +303,11 @@ class SecteamTasks:
         if os.path.exists(tmpdest):
             log.debug("removing %s", tmpdest)
             os.unlink(tmpdest)
-        split(stream, tmpdest)
+        cves = CVEPool(tmpdest)
+        for i, chunk in enumerate(split(stream)):
+            if i % 100 == 0:
+                yield True
+            cves.put_xml(chunk)
         os.rename(tmpdest, self.paths.cve_database())
 
     def easy_tickets(self):
@@ -379,4 +378,8 @@ class Interface:
             print "%s %s: %s" % (ticket.bugid, ticket.cve.cveid, line)
 
     def pull_cves(self):
-        self.tasks.pull_cves(sys.stdin)
+        show = os.isatty(1)
+        for _ in self.tasks.pull_cves(sys.stdin):
+            if show:
+                sys.stdout.write(".")
+                sys.stdout.flush()
