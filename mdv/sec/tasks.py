@@ -10,7 +10,7 @@ import shelve
 import re
 import urllib
 import logging
-import zipfile
+import bsddb
 
 from cStringIO import StringIO
 from xml.etree import ElementTree
@@ -150,60 +150,19 @@ class TicketCache:
         log.debug("closing TicketCache at %s" % self.path)
         self._shelf.close()
 
-def fetch_url(url):
-    """Small layer just to allow further enhacements"""
-    log.info("fetching URL: %s" % url)
-    return urllib.urlopen(url).read()
-
-
-class CVESource:
+class CVEPool:
 
     def __init__(self, dbpath):
-        self.root = "./tree"
         self.dbpath = dbpath
         log.info("opening cve archive at %s" % self.dbpath)
-        self._zipfile = zipfile.ZipFile(dbpath, "r")
-
-    def _get_path(self, cveid):
-        cve_, year, number = cveid.split("-")
-        return os.path.join(self.root, year, number[:2], cveid)
+        self._db = bsddb.btopen(dbpath)
 
     def _get_xml(self, cveid):
-        path = self._get_path(cveid)
-        log.info("retrieving %s at %s in archive" % (cveid, path))
-        raw = self._zipfile.read(path)
-        xml = ElementTree.parse(StringIO(raw))
+        xml = self._db.get(cveid)
         return xml
 
-    def _get_cve_from_xml(self, xml):
-        return CVE.from_mitre_xml(xml)
-
-    def get(self, cveid):
-        xml = self._get_xml(cveid)
-        cve = self._get_cve_from_xml(xml)
-        return cve
-
-    def close(self):
-        log.debug("closing cve archive at %s" % self.dbpath)
-        self._zipfile.close()
-
-
-class CVE:
-
-    class NoDescriptionYet:
-        pass
-
-    cveid = None
-    references = None
-    description = None
-    status = None
-    phase = None
-
-    def __init__(self, cveid):
-        self.cveid = cveid
-
     @classmethod
-    def from_mitre_xml(klass, xml):
+    def _get_cve(klass, xml):
         root = xml.getroot()
         cveid = root.attrib["name"]
         cve = CVE(cveid) #FIXME we already have cveid!
@@ -221,6 +180,34 @@ class CVE:
             for ref in root.findall(".//refs/ref")]
         # don't parse comments, as apparently we wont' need them
         return cve
+
+    def get(self, cveid):
+        xml = self._get_xml(cveid)
+        cve = self._get_cve(xml)
+        return cve
+
+    def put(self, cveid, xml):
+        self._db[cveid] = xml
+
+    def close(self):
+        log.debug("closing cve archive at %s" % self.dbpath)
+        self._db.save()
+        self._db.close()
+
+
+class CVE:
+
+    class NoDescriptionYet:
+        pass
+
+    cveid = None
+    references = None
+    description = None
+    status = None
+    phase = None
+
+    def __init__(self, cveid):
+        self.cveid = cveid
 
 
 class SecurityTicket:
@@ -311,7 +298,7 @@ class TicketSource:
         self._cache.close()
 
 
-class KTasks:
+class SecteamTasks:
 
     class Reasons:
         class HasCommits:
@@ -391,51 +378,4 @@ class Interface:
             print "%s %s: %s" % (ticket.bugid, ticket.cve.cveid, line)
             
 
-def parse_options(args):
-    def parse_option(option, opt_str, value, parser, *args, **kwargs):
-        kv = value.split("=", 1)
-        if len(kv) != 2:
-           raise optparse.OptionValueError, "-o accepts values only in "\
-                   "the name=value form"
-        levels = kv[0].split(".")
-        lastv = kv[1]
-        for name in levels[:0:-1]:
-            lastv = {name: lastv}
-        parser.values.config_options[levels[0]] = lastv
-    parser = optparse.OptionParser("ktasks")
-    parser.set_defaults(config_options={})
-    parser.add_option("-e", "--easy-tickets", action="store_true",
-            default=False, help="show easy to fix tickets")
-    parser.add_option("-s", "--status", action="store_true", default=False,
-            help="show the status of the tickets for each distro")
-    parser.add_option("-v", "--verbose", action="store_true", default=False)
-    parser.add_option("-o", "--option", type="string", action="callback",
-            callback=parse_option,
-            help="set one configuration option in the form opt=val")
-    parsed = parser.parse_args(args)
-    return parsed
 
-def main():
-    options, args = parse_options(sys.argv)
-    if options.verbose:
-        logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.ERROR)
-    config = Config()
-    config.merge(options.config_options)
-    path = (os.environ.get(config.conf.path_environment) or
-            os.path.expanduser(os.path.join("~", config.conf.user_file)))
-    if os.path.exists(path):
-        config.load(path)
-    ktasks = KTasks(config)
-    interface = Interface(config, ktasks)
-    try:
-        if options.easy_tickets:
-            interface.easy_tickets()
-        if options.status:
-            interface.status()
-    finally:
-        ktasks.finish()
-
-if __name__ == "__main__":
-    main()
