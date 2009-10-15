@@ -26,6 +26,8 @@ def parse_options(args):
     parser.add_option("-v", "--verbose", action="store_true", default=False)
     parser.add_option("--pull-cves", action="store_true", default=False,
             help="pull cves from a MITRE's XML text file")
+    parser.add_option("--init", action="store_true", default=False,
+            help="create initial directory structure needed for sekt")
     parser.add_option("-o", "--option", type="string", action="callback",
             callback=parse_option,
             help="set one configuration option in the form opt=val")
@@ -53,6 +55,8 @@ def main():
             interface.status()
         if options.pull_cves:
             interface.pull_cves()
+        if options.init:
+            interface.init()
     finally:
         tasks.finish()
 

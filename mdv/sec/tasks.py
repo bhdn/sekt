@@ -267,8 +267,11 @@ class Paths:
         return os.path.expanduser(path)
 
     def _workdir_file(self, name_or_path):
-        return os.path.join(self._config_path(self.config.workdir),
+        return os.path.join(self.workdir(),
                 self._config_path(name_or_path))
+
+    def workdir(self):
+        return self._config_path(self.config.workdir)
 
     def cve_database(self, tmp=False):
         if tmp:
@@ -309,6 +312,14 @@ class SecteamTasks:
                 yield True
             cves.put_xml(chunk)
         os.rename(tmpdest, self.paths.cve_database())
+
+    def init(self):
+        path = self.paths.workdir()
+        if os.path.exists(path):
+            return False
+        log.info("created %s", path)
+        os.mkdir(path)
+        return True
 
     def easy_tickets(self):
         """Points those tickets that (apparently) can be easily fixed.
@@ -383,3 +394,9 @@ class Interface:
             if show:
                 sys.stdout.write(".")
                 sys.stdout.flush()
+
+    def init(self):
+        if self.tasks.init():
+            print "done"
+        else:
+            print "already initialized"
