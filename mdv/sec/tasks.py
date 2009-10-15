@@ -116,40 +116,6 @@ class Config(ConfWrapper):
         return "<Config %s>" % self._conf
 
 
-class TicketCache:
-
-    def __init__(self, path):
-        self.path = path
-        self._shelf = None
-        self._cache = {}
-        self.load()
-
-    def load(self):
-        log.info("opening shelf at %s" % self.path)
-        self._shelf = shelve.open(self.path)
-
-    def get(self, bugid):
-        try:
-            return self._cache[bugid]
-        except KeyError:
-            try:
-                ticket = self._shelf[bugid]
-                self._cache[bugid] = ticket
-                log.info("ticket cache hit for %s" % bugid)
-                return ticket
-            except KeyError:
-                log.info("ticket cache miss for %s"  % bugid)
-                raise UnknownTicket
-
-    def add(self, ticket):
-        self._shelf[ticket.bugid] = ticket
-        self._shelf.sync()
-        self._cache[ticket.bugid] = ticket
-
-    def close(self):
-        log.debug("closing TicketCache at %s" % self.path)
-        self._shelf.close()
-
 class CVEPool:
 
     def __init__(self, dbpath):
