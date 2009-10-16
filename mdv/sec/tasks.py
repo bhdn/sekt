@@ -86,6 +86,8 @@ class ConfWrapper:
     def __getitem__(self, name):
         return self._conf[name]
 
+    def __repr__(self):
+        return yaml.dump(self._conf, default_flow_style=False)
 
 class Config(ConfWrapper):
 
@@ -111,10 +113,6 @@ class Config(ConfWrapper):
         """Load the configuration file in the given path"""
         raw = open(path).read()
         self.parse(raw)
-
-    def __repr__(self):
-        return "<Config %s>" % self._conf
-
 
 class CVEPool:
 
@@ -400,3 +398,8 @@ class Interface:
             print "done"
         else:
             print "already initialized"
+
+    def dump_conf(self):
+        print "# vim:ft=yaml"
+        print repr(self.config)
+
