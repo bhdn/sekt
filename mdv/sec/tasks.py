@@ -306,6 +306,7 @@ class SecteamTasks:
             if i % 100 == 0:
                 yield True
             cves.put_xml(chunk)
+        cves.close()
         os.rename(tmpdest, self.paths.cve_database())
 
     def init(self):
