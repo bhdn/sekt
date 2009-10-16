@@ -50,14 +50,14 @@ def main():
     interface = Interface(config, tasks)
     try:
         try:
+            if options.init:
+                interface.init()
+            if options.pull_cves:
+                interface.pull_cves()
             if options.easy_tickets:
                 interface.easy_tickets()
             if options.status:
                 interface.status()
-            if options.pull_cves:
-                interface.pull_cves()
-            if options.init:
-                interface.init()
         finally:
             tasks.finish()
     except KeyboardInterrupt:
