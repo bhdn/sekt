@@ -49,16 +49,20 @@ def main():
     tasks = SecteamTasks(config)
     interface = Interface(config, tasks)
     try:
-        if options.easy_tickets:
-            interface.easy_tickets()
-        if options.status:
-            interface.status()
-        if options.pull_cves:
-            interface.pull_cves()
-        if options.init:
-            interface.init()
-    finally:
-        tasks.finish()
+        try:
+            if options.easy_tickets:
+                interface.easy_tickets()
+            if options.status:
+                interface.status()
+            if options.pull_cves:
+                interface.pull_cves()
+            if options.init:
+                interface.init()
+        finally:
+            tasks.finish()
+    except KeyboardInterrupt:
+        sys.stderr.write("interrupted\n")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
