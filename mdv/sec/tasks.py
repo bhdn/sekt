@@ -165,6 +165,8 @@ class CVE:
     def __init__(self, cveid):
         self.cveid = cveid
 
+    def __repr__(self):
+        return yaml.dump(self.__dict__, default_flow_style=False)
 
 class SecurityTicket:
     """Specialized wrapper for the bugz.Ticket class.
@@ -288,9 +290,10 @@ class SecteamTasks:
         self.tickets = None
 
     def open_stuff(self):
-        self.cves = CVEPool(paths.cve_database())
-        self.tickets = TicketSource(self.cvesource,
-                config.ticket_cache, config.bugzilla_base_url, config)
+        self.cves = CVEPool(self.paths.cve_database())
+        #self.tickets = TicketSource(self.cvesource,
+        #        self.config.ticket_cache, self.config.bugzilla_base_url,
+        #        self.config)
 
     def pull_cves(self, stream):
         """Pull CVE XMLs from a text stream (usually the one from
@@ -316,6 +319,13 @@ class SecteamTasks:
         log.info("created %s", path)
         os.mkdir(path)
         return True
+
+    def dump_cve(self, cveid):
+        self.open_stuff()
+        cve = self.cves.get(cveid)
+        if cve:
+            return repr(cve)
+        return None
 
     def easy_tickets(self):
         """Points those tickets that (apparently) can be easily fixed.
@@ -400,4 +410,13 @@ class Interface:
     def dump_conf(self):
         print "# vim" + ":ft=yaml"
         print repr(self.config)
+
+    def dump_cve(self, options):
+        dump = self.tasks.dump_cve(options.cve)
+        if dump:
+            print "# vim" + ":ft=yaml"
+            print dump
+        else:
+            sys.stderr.write("no such identifier: %s\n" % options.cve)
+            sys.exit(1)
 
