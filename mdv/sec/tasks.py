@@ -1,7 +1,4 @@
-#!/usr/bin/python
-
-#TODO use yaml as configuration source
-#TODO move all string constants to configuration
+#!/usr/bin/env python
 
 import sys
 import os
@@ -400,6 +397,6 @@ class Interface:
             print "already initialized"
 
     def dump_conf(self):
-        print "# vim:ft=yaml"
+        print "# vim" + ":ft=yaml"
         print repr(self.config)
 
