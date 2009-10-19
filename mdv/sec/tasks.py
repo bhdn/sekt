@@ -2,19 +2,22 @@
 
 import sys
 import os
-import optparse
-import re
-import urllib
 import logging
-import tempfile
-
-from cStringIO import StringIO
-from xml.etree import ElementTree
 
 # external deps:
 
-import yaml
-import bugz
+#import yaml
+#import bugz
+
+# yes, I hate high import times:
+
+def yaml():
+    import yaml
+    return yaml
+
+def bugz():
+    import bugz
+    return bugz
 
 CONFIG_DEFAULTS = """\
 workdir: ~/sekt/ 
@@ -83,7 +86,7 @@ class ConfWrapper:
         return self._conf[name]
 
     def __repr__(self):
-        return yaml.dump(self._conf, default_flow_style=False)
+        return yaml().dump(self._conf, default_flow_style=False)
 
 class Config(ConfWrapper):
 
@@ -102,7 +105,7 @@ class Config(ConfWrapper):
         self._conf = mergeconf(self._conf, data)
 
     def parse(self, raw):
-        data = yaml.load(raw)
+        data = yaml().load(raw)
         self.merge(data)
 
     def load(self, path):
@@ -120,6 +123,8 @@ class CVEPool:
 
     @classmethod
     def _get_cve(klass, rawxml):
+        from xml.etree import ElementTree
+        from cStringIO import StringIO
         xml = ElementTree.parse(StringIO(rawxml))
         root = xml.getroot()
         cveid = root.attrib["name"]
@@ -153,7 +158,7 @@ class CVEPool:
     @classmethod
     def from_yaml(klass, rawyaml):
         cve = CVE(None)
-        cve.__dict__.update(yaml.parse(rawyaml))
+        cve.__dict__.update(yaml().parse(rawyaml))
         return cve
 
     def _path(self, cveid):
@@ -170,6 +175,7 @@ class CVEPool:
         dir = os.path.dirname(path)
         if not os.path.exists(dir):
             os.mkdir(dir)
+        import tempfile
         f = tempfile.NamedTemporaryFile(dir=dir, delete=False)
         f.write(rawyaml)
         f.close()
@@ -193,7 +199,7 @@ class CVE:
         self.cveid = cveid
 
     def __repr__(self):
-        return yaml.dump(self.__dict__, default_flow_style=False)
+        return yaml().dump(self.__dict__, default_flow_style=False)
 
 class SecurityTicket:
     """Specialized wrapper for the bugz.Ticket class.
@@ -228,6 +234,7 @@ class SecurityTicket:
 
     @classmethod
     def _find_release_status(klass, config, comments):
+        import re
         # example: "CS3.0: INVALID | 2006.0: OPEN | 2007.0: FIXED"
         release_status = []
         valid = "|".join(config.cve.valid_status)
@@ -439,4 +446,3 @@ class Interface:
         else:
             sys.stderr.write("no such identifier: %s\n" % options.cve)
             sys.exit(1)
-

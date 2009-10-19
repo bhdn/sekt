@@ -1,12 +1,9 @@
 #!/usr/bin/python
 import sys
 import os
-import optparse
-import logging
-
-from mdv.sec.tasks import Interface, Config, SecteamTasks
 
 def parse_options(args):
+    import optparse
     def parse_option(option, opt_str, value, parser, *args, **kwargs):
         kv = value.split("=", 1)
         if len(kv) != 2:
@@ -38,12 +35,8 @@ def parse_options(args):
     parsed = parser.parse_args(args)
     return parsed
 
-def main():
-    options, args = parse_options(sys.argv)
-    if options.verbose:
-        logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.ERROR)
+def run(options, args):
+    from mdv.sec.tasks import Interface, Config, SecteamTasks
     config = Config()
     config.merge(options.config_options)
     path = (os.environ.get(config.conf.path_environment) or
@@ -71,6 +64,18 @@ def main():
     except KeyboardInterrupt:
         sys.stderr.write("interrupted\n")
         sys.exit(1)
+
+def setup_logging(options):
+    import logging
+    if options.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.ERROR)
+
+def main():
+    options, args = parse_options(sys.argv)
+    setup_logging(options)
+    run(options, args)
 
 if __name__ == "__main__":
     main()
