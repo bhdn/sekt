@@ -3,11 +3,10 @@
 import sys
 import os
 import optparse
-import shelve
 import re
 import urllib
 import logging
-import bsddb
+import tempfile
 
 from cStringIO import StringIO
 from xml.etree import ElementTree
@@ -19,7 +18,7 @@ import bugz
 
 CONFIG_DEFAULTS = """\
 workdir: ~/sekt/ 
-cve_database: cves.bsddb
+cve_database: cves
 bugzilla_base_url: https://qa.mandriva.com
 cve:
     valid_status:
@@ -116,7 +115,8 @@ class CVEPool:
     def __init__(self, dbpath):
         self.dbpath = dbpath
         log.info("opening cve archive at %s", self.dbpath)
-        self._db = shelve.open(dbpath)
+        if not os.path.exists(dbpath):
+            os.mkdir(dbpath)
 
     @classmethod
     def _get_cve(klass, rawxml):
@@ -140,16 +140,41 @@ class CVEPool:
         return cve
 
     def get(self, cveid):
-        return self._db.get(cveid)
+        return self.from_yaml(self.get_dump(cveid))
+
+    def get_dump(self, cveid):
+        path = self._path(cveid)
+        try:
+            rawyaml = open(path).read()
+        except IOError:
+            return None
+        return rawyaml
+
+    @classmethod
+    def from_yaml(klass, rawyaml):
+        cve = CVE(None)
+        cve.__dict__.update(yaml.parse(rawyaml))
+        return cve
+
+    def _path(self, cveid):
+        _, y, _ = cveid.split("-", 2)
+        path = os.path.join(self.dbpath, y, cveid)
+        return path
 
     def put_xml(self, xml):
         cve = self._get_cve(xml)
-        self._db[cve.cveid] = cve
+        rawyaml = repr(cve)
+        path = self._path(cve.cveid)
+        dir = os.path.dirname(path)
+        if not os.path.exists(dir):
+            os.mkdir(dir)
+        f = tempfile.NamedTemporaryFile(dir=dir, delete=False)
+        f.write(rawyaml)
+        f.close()
+        os.rename(f.name, path)
 
     def close(self):
         log.debug("closing cve archive at %s" % self.dbpath)
-        self._db.sync()
-        self._db.close()
 
 class CVE:
 
@@ -300,17 +325,12 @@ class SecteamTasks:
         cve.mitre.org)
         """
         from mdv.sec.pullcves import split
-        tmpdest = self.paths.cve_database(tmp=True)
-        if os.path.exists(tmpdest):
-            log.debug("removing %s", tmpdest)
-            os.unlink(tmpdest)
-        cves = CVEPool(tmpdest)
+        cves = CVEPool(self.paths.cve_database())
         for i, chunk in enumerate(split(stream)):
             if i % 100 == 0:
                 yield True
             cves.put_xml(chunk)
         cves.close()
-        os.rename(tmpdest, self.paths.cve_database())
 
     def init(self):
         path = self.paths.workdir()
@@ -322,10 +342,8 @@ class SecteamTasks:
 
     def dump_cve(self, cveid):
         self.open_stuff()
-        cve = self.cves.get(cveid)
-        if cve:
-            return repr(cve)
-        return None
+        dump = self.cves.get_dump(cveid)
+        return dump
 
     def easy_tickets(self):
         """Points those tickets that (apparently) can be easily fixed.
