@@ -157,6 +157,8 @@ class CVEPool:
         return cve
 
     def _path(self, cveid):
+        if not (cveid.startswith("CVE-") or cveid.startswith("CAN-")):
+            cveid = "CVE-" + cveid
         _, y, _ = cveid.split("-", 2)
         path = os.path.join(self.dbpath, y, cveid)
         return path
