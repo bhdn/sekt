@@ -43,6 +43,9 @@ class Error(Exception):
 class TicketError(Error):
     pass
 
+class InvalidCVE(Error):
+    pass
+
 class UnknownTicket:
     pass
 
@@ -158,7 +161,10 @@ class CVEPool:
     def _path(self, cveid):
         if not (cveid.startswith("CVE-") or cveid.startswith("CAN-")):
             cveid = "CVE-" + cveid
-        _, y, _ = cveid.split("-", 2)
+        try:
+            _, y, _ = cveid.split("-", 2)
+        except ValueError:
+            raise InvalidCVE, "invalid CVE ID: %s" % cveid
         path = os.path.join(self.dbpath, y, cveid)
         return path
 
