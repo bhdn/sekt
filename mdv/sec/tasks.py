@@ -152,15 +152,30 @@ class CVEPool:
             return None
         return rawyaml
 
+    def find_cve(self, cveid, dump=False):
+        import glob
+        cveid = self._fix_prepend(cveid)
+        expr = "%s/*/%s*" % (self.dbpath, cveid)
+        for path in glob.iglob(expr):
+            rawyaml = open(path).read()
+            if dump:
+                yield rawyaml
+            else:
+                yield self.from_yaml(rawyaml)
+
     @classmethod
     def from_yaml(klass, rawyaml):
         cve = CVE(None)
         cve.__dict__.update(yaml().parse(rawyaml))
         return cve
 
-    def _path(self, cveid):
+    def _fix_prepend(self, cveid):
         if not (cveid.startswith("CVE-") or cveid.startswith("CAN-")):
             cveid = "CVE-" + cveid
+        return cveid
+
+    def _path(self, cveid):
+        cveid = self._fix_prepend(cveid)
         try:
             _, y, _ = cveid.split("-", 2)
         except ValueError:
@@ -354,6 +369,10 @@ class SecteamTasks:
         dump = self.cves.get_dump(cveid)
         return dump
 
+    def find_cve(self, cveid, dump=False):
+        self.open_stuff()
+        return self.cves.find_cve(cveid, dump)
+
     def easy_tickets(self):
         """Points those tickets that (apparently) can be easily fixed.
 
@@ -438,10 +457,31 @@ class Interface:
         print repr(self.config)
 
     def dump_cve(self, options):
-        dump = self.tasks.dump_cve(options.cve)
-        if dump:
-            print "# vim" + ":ft=yaml"
-            print dump
+        try:
+            dump = self.tasks.dump_cve(options.cve)
+        except InvalidCVE:
+            dump = None
+        if dump is None:
+            try:
+                found = self.tasks.find_cve(options.cve, dump=True)
+                if os.isatty(1):
+                    import subprocess
+                    p = subprocess.Popen(["less"], stdin=subprocess.PIPE)
+                    try:
+                        for dump in found:
+                            p.stdin.write(dump)
+                    finally:
+                        p.stdin.close()
+                        p.wait()
+                else:
+                    sys.stdout.writelines(found)
+            except IOError, e:
+                if e.errno != 32: # broken pipe
+                    raise
         else:
-            sys.stderr.write("no such identifier: %s\n" % options.cve)
-            sys.exit(1)
+            if dump:
+                print "# vim" + ":ft=yaml"
+                print dump
+            else:
+                sys.stderr.write("no such identifier: %s\n" % options.cve)
+                sys.exit(1)
