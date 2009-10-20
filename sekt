@@ -36,7 +36,7 @@ def parse_options(args):
     return parsed
 
 def run(options, args):
-    from mdv.sec.tasks import Interface, Config, SecteamTasks
+    from mdv.sec.tasks import Interface, Config, SecteamTasks, Error
     config = Config()
     config.merge(options.config_options)
     path = (os.environ.get(config.conf.path_environment) or
@@ -61,6 +61,9 @@ def run(options, args):
                 interface.dump_conf()
         finally:
             tasks.finish()
+    except Error, e:
+        sys.stderr.write("error: %s\n" % e)
+        sys.exit(1)
     except KeyboardInterrupt:
         sys.stderr.write("interrupted\n")
         sys.exit(1)
