@@ -3,6 +3,8 @@
 import sys
 import os
 import logging
+from cStringIO import StringIO
+import ConfigParser
 
 # external deps:
 
@@ -20,20 +22,17 @@ def bugz():
     return bugz
 
 CONFIG_DEFAULTS = """\
-workdir: ~/sekt/ 
-cve_database: cves
-bugzilla_base_url: https://qa.mandriva.com
-cve:
-    valid_status:
-        - OPEN
-        - NEW
-        - INVALID
-        - FIXED
-        - RELEASED
-        - WONTFIX
-conf:
-    path_environment: SEKT_CONF
-    user_file: .sekt
+[sekt]
+workdir = ~/sekt/
+cve_database = cves
+bugzilla_base_url = https://qa.mandriva.com
+
+[cve]
+valid_status = OPEN NEW INVALID FIXED RELEASED WONTFIX
+
+[conf]
+path_environment = SEKT_CONF
+user_file = .sekt
 """
 
 log = logging.getLogger("sekt")
@@ -71,47 +70,43 @@ def mergeconf(base, another):
 
 class ConfWrapper:
 
-    _conf = None
-    
-    def __init__(self, conf):
-        self._conf = conf
+    _config = None
+
+    def __init__(self, config, section=None):
+        self._config = config
+        self._section = section
 
     def __getattr__(self, name):
-        val = self._conf[name]
-        if type(val) is dict:
-            return ConfWrapper(val)
+        if self._section is None:
+            return ConfWrapper(self._config, name)
+        val = self._config.get(self._section, name)
         return val
 
-    def __getitem__(self, name):
-        return self._conf[name]
-
     def __repr__(self):
-        return yaml().dump(self._conf, default_flow_style=False)
+        output = StringIO()
+        self._config.write(output)
+        return output.getvalue()
 
 class Config(ConfWrapper):
 
-    _conf = None
     raw_defaults = CONFIG_DEFAULTS
-    options = None
-    args = None
+    _section = None
+    _config = None
 
     def __init__(self, defaults=None):
+        self._config = ConfigParser.ConfigParser(defaults=defaults)
         if defaults is None:
             self.parse(self.raw_defaults)
-        else:
-            self.merge(defaults)
 
     def merge(self, data):
         self._conf = mergeconf(self._conf, data)
 
     def parse(self, raw):
-        data = yaml().load(raw)
-        self.merge(data)
+        self._config.readfp(StringIO(raw))
 
     def load(self, path):
         """Load the configuration file in the given path"""
-        raw = open(path).read()
-        self.parse(raw)
+        self._config.read(path)
 
 class CVEPool:
 
@@ -124,7 +119,6 @@ class CVEPool:
     @classmethod
     def _get_cve(klass, rawxml):
         from xml.etree import ElementTree
-        from cStringIO import StringIO
         xml = ElementTree.parse(StringIO(rawxml))
         root = xml.getroot()
         cveid = root.attrib["name"]
@@ -302,12 +296,12 @@ class Paths:
                 self._config_path(name_or_path))
 
     def workdir(self):
-        return self._config_path(self.config.workdir)
+        return self._config_path(self.config.sekt.workdir)
 
     def cve_database(self, tmp=False):
         if tmp:
             return self.cve_database() + ".tmp"
-        return self._workdir_file(self.config.cve_database)
+        return self._workdir_file(self.config.sekt.cve_database)
 
 class SecteamTasks:
 
@@ -435,7 +429,6 @@ class Interface:
             print "already initialized"
 
     def dump_conf(self):
-        print "# vim" + ":ft=yaml"
         print repr(self.config)
 
     def dump_cve(self, options):
