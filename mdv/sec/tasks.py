@@ -480,7 +480,6 @@ class Interface:
                     raise
         else:
             if dump:
-                print "# vim" + ":ft=yaml"
                 print dump
             else:
                 sys.stderr.write("no such identifier: %s\n" % options.cve)
