@@ -470,6 +470,7 @@ class Interface:
                     try:
                         for dump in found:
                             p.stdin.write(dump)
+                            p.stdin.write("\n")
                     finally:
                         p.stdin.close()
                         p.wait()
