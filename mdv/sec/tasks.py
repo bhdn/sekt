@@ -216,60 +216,6 @@ class CVE:
     def __repr__(self):
         return yaml().dump(self.__dict__, default_flow_style=False)
 
-class SecurityTicket:
-    """Specialized wrapper for the bugz.Ticket class.
-    
-    It provides all the CVE related data from one ordinary ticket.
-    """
-    
-    _ticket = None
-    cveid = None
-    cve = None
-    release_status = None
-
-    def __init__(self, ticket, cvesource, config):
-        self._ticket = ticket
-        self._parse_ticket(cvesource, config)
-
-    def _parse_ticket(self, cvesource, config):
-        #TODO move this regexp to configuration
-        cvere = r"SECURITY +ADVISORY:? +(?P<cve>(?P<kind>CVE|CAN)-....-....)"
-        found = re.search(cvere, self.title)
-        if found is None:
-            raise TicketError, "bad ticket title: %r, must match %s" % \
-                    (self.title, cvere)
-        kind = found.group("kind")
-        if kind == "CAN":
-            # exception: we don't have CAN data in our database, complain
-            # about it
-            raise CANTicket
-        self.cveid = found.group("cve")
-        self.cve = cvesource.get(self.cveid)
-        self.release_status = self._find_release_status(config, self.comments)
-
-    @classmethod
-    def _find_release_status(klass, config, comments):
-        import re
-        # example: "CS3.0: INVALID | 2006.0: OPEN | 2007.0: FIXED"
-        release_status = []
-        valid = "|".join(config.cve.valid_status)
-        expr = r"(?P<line>[^\s:]+: (?:%s)(?: \| [^ ]+: (?:%s))*)" % (valid,
-                valid)
-        statusre = re.compile(expr)
-        for comment in comments:
-            found = statusre.search(comment["what"])
-            if found:
-                line = found.group()
-                pairs = line.split("|")
-                status = dict((k.strip(), v.strip()) for k, v in
-                    (pair.split(":") for pair in pairs))
-                release_status.append(status)
-        return release_status
-
-    def __getattr__(self, name):
-        return getattr(self._ticket, name)
-
-
 class TicketSource:
 
     def __init__(self, cvesource, cachepath, base, config):
@@ -372,46 +318,6 @@ class SecteamTasks:
     def find_cve(self, cveid, dump=False):
         self.open_stuff()
         return self.cves.find_cve(cveid, dump)
-
-    def easy_tickets(self):
-        """Points those tickets that (apparently) can be easily fixed.
-
-        Those tickets considered "easy" are usually:
-
-        - those that have the git commit URL in the references section of
-          the CVE
-        - or have pointers to the changelog containing the commit (harder
-          to find the right commit)
-
-        @return: generator with tuples of (ticket, [(reason, *args), ...])
-        """
-        gitbase = "git/"
-        for ticket in self.ticketsource.security_tickets():
-            if ticket.resolution:
-                continue
-            for ref in ticket.cve.references:
-                url = ref.get("url")
-                if url: 
-                    reasons = []
-                    if gitbase in url:
-                        reasons.append((self.Reasons.HasCommits, url))
-                    if "ChangeLog-2." in url:
-                        reasons.append((self.Reasons.HasChangeLogEntry, url))
-                    if reasons:
-                        yield (ticket, reasons)
-
-    def status(self):
-        """Shows the status for each ticket, and each distro.
-
-        @return: a sequence of (ticket, last_status) tuples.
-                 last_status being a dict of DISTRO: STATUS pairs.
-        """
-        for ticket in self.ticketsource.security_tickets():
-            if not ticket.release_status:
-                status = None
-            else:
-                status = ticket.release_status[-1]
-            yield (ticket, status)
 
     def finish(self):
         if self.cves:
