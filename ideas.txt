@@ -1,0 +1,19 @@
+Concepts:
+
+- cve.mitre.org's CVEs
+- CVE tickets
+- advisory tickets
+- mdv advisories MDVSAs
+
+Tasks that could be implemented in sekt:
+
+- create CVE tickets
+- create "advisory for $package" tickets, bind (using Depends or Blocks)
+  CVEs automatically
+- automatically generate advisory messages based on the messages from the
+  CVEs associated in each advisory ticket
+- bind advisory tickets to MDVSA (or MDVAs) numbers
+
+What it can't do:
+
+- run mkadvisory!
