@@ -2,6 +2,7 @@
 
 import sys
 import os
+import time
 import logging
 from cStringIO import StringIO
 import ConfigParser
@@ -25,6 +26,7 @@ CONFIG_DEFAULTS = """\
 [sekt]
 workdir = ~/sekt/
 cve_database = cves
+cve_info = cves-metadata.shelve
 bugzilla_base_url = https://qa.mandriva.com
 
 [cve]
@@ -50,6 +52,9 @@ class UnknownTicket:
     pass
 
 class CANTicket(TicketError):
+    pass
+
+class PullError(Error):
     pass
 
 
@@ -113,11 +118,20 @@ class Config(ConfWrapper):
 
 class CVEPool:
 
-    def __init__(self, dbpath):
+    def __init__(self, dbpath, infopath):
         self.dbpath = dbpath
+        self.infopath = infopath
         log.info("opening cve archive at %s", self.dbpath)
         if not os.path.exists(dbpath):
             os.mkdir(dbpath)
+        self._info = None # metadata is loaded lazily
+        self._cvere = None
+
+    def open(self):
+        import shelve
+        log.info("opening cve metadata at %s", self.infopath)
+        self._info = shelve.open(self.infopath)
+        self.open = lambda: None # hihihihi...
 
     @classmethod
     def _get_cve(klass, rawxml):
@@ -183,21 +197,60 @@ class CVEPool:
         path = os.path.join(self.dbpath, y, cveid)
         return path
 
+    def _get_info(self, cveid):
+        self.open()
+        rawinfo = self._info.get(cveid)
+        if rawinfo is not None:
+            try:
+                hash, changed = rawinfo
+            except ValueError:
+                hash = changed = None
+            info = {"hash": hash, "changed": changed}
+            return info
+
+    def _set_info(self, cveid, hash=None, changed=None):
+        self.open()
+        rawinfo = (hash, changed)
+        self._info[cveid] = rawinfo
+
+    def _get_cve_regexp(self):
+        import re
+        self._re = re.compile("name=\"(?P<name>CVE-....-....)\"")
+        self._get_cve_regexp = lambda: self._re
+        return self._re
+
+    def _get_id(self, xml):
+        found = self._get_cve_regexp().search(xml)
+        if found is not None:
+            return found.group("name")
+        raise PullError, "invalid CVE XML chunk: %s" % xml
+
     def put_xml(self, xml):
-        cve = self._get_cve(xml)
-        rawyaml = repr(cve)
-        path = self._path(cve.cveid)
-        dir = os.path.dirname(path)
-        if not os.path.exists(dir):
-            os.mkdir(dir)
-        import tempfile
-        f = tempfile.NamedTemporaryFile(dir=dir, delete=False)
-        f.write(rawyaml)
-        f.close()
-        os.rename(f.name, path)
+        import hashlib
+        md5 = hashlib.md5()
+        md5.update(xml)
+        newhash = md5.hexdigest()
+        cveid = self._get_id(xml)
+        info = self._get_info(cveid)
+        if info and info["hash"] == newhash:
+            log.debug("no need to update %s (%s)", cveid, newhash)
+        else:
+            cve = self._get_cve(xml)
+            rawyaml = repr(cve)
+            path = self._path(cve.cveid)
+            dir = os.path.dirname(path)
+            if not os.path.exists(dir):
+                os.mkdir(dir)
+            import tempfile
+            f = tempfile.NamedTemporaryFile(dir=dir, delete=False)
+            f.write(rawyaml)
+            f.close()
+            os.rename(f.name, path)
+            self._set_info(cveid, hash=newhash, changed=time.time())
 
     def close(self):
         log.debug("closing cve archive at %s" % self.dbpath)
+        self._info.close()
 
 class CVE:
 
@@ -270,6 +323,9 @@ class Paths:
             return self.cve_database() + ".tmp"
         return self._workdir_file(self.config.sekt.cve_database)
 
+    def cve_info(self):
+        return self._workdir_file(self.config.sekt.cve_info)
+
 class SecteamTasks:
 
     class Reasons:
@@ -285,7 +341,8 @@ class SecteamTasks:
         self.tickets = None
 
     def open_stuff(self):
-        self.cves = CVEPool(self.paths.cve_database())
+        self.cves = CVEPool(self.paths.cve_database(),
+                self.paths.cve_info())
         #self.tickets = TicketSource(self.cvesource,
         #        self.config.ticket_cache, self.config.bugzilla_base_url,
         #        self.config)
@@ -295,7 +352,7 @@ class SecteamTasks:
         cve.mitre.org)
         """
         from mdv.sec.pullcves import split
-        cves = CVEPool(self.paths.cve_database())
+        cves = CVEPool(self.paths.cve_database(), self.paths.cve_info())
         for i, chunk in enumerate(split(stream)):
             if i % 100 == 0:
                 yield True
