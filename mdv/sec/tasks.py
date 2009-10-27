@@ -247,6 +247,8 @@ class CVEPool:
             f.close()
             os.rename(f.name, path)
             self._set_info(cveid, hash=newhash, changed=time.time())
+            return True
+        return False # not new
 
     def close(self):
         log.debug("closing cve archive at %s" % self.dbpath)
@@ -353,10 +355,9 @@ class SecteamTasks:
         """
         from mdv.sec.pullcves import split
         cves = CVEPool(self.paths.cve_database(), self.paths.cve_info())
-        for i, chunk in enumerate(split(stream)):
-            if i % 100 == 0:
-                yield True
-            cves.put_xml(chunk)
+        for chunk in split(stream):
+            new = cves.put_xml(chunk)
+            yield new
         cves.close()
 
     def init(self):
@@ -405,10 +406,15 @@ class Interface:
 
     def pull_cves(self):
         show = os.isatty(1)
-        for _ in self.tasks.pull_cves(sys.stdin):
-            if show:
-                sys.stdout.write(".")
-                sys.stdout.flush()
+        newcount = 0
+        i = 0
+        for i, new in enumerate(self.tasks.pull_cves(sys.stdin)):
+            if new:
+                newcount += 1
+            if show and i % 1000 == 0:
+                print i
+        if show:
+            print "%d parsed, %d new" % (i, newcount)
 
     def init(self):
         if self.tasks.init():
