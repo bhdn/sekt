@@ -252,7 +252,8 @@ class CVEPool:
 
     def close(self):
         log.debug("closing cve archive at %s" % self.dbpath)
-        self._info.close()
+        if self._info:
+            self._info.close()
 
 class CVE:
 
