@@ -3,6 +3,7 @@
 import sys
 import os
 import time
+import math
 import logging
 from cStringIO import StringIO
 import ConfigParser
@@ -26,6 +27,7 @@ CONFIG_DEFAULTS = """\
 [sekt]
 workdir = ~/sekt/
 cve_database = cves
+packages_database = packages.sqlite
 cve_info = cves-metadata.shelve
 bugzilla_base_url = https://qa.mandriva.com
 
@@ -55,6 +57,9 @@ class CANTicket(TicketError):
     pass
 
 class PullError(Error):
+    pass
+
+class PackageError(Error):
     pass
 
 
@@ -111,6 +116,28 @@ class Config(ConfWrapper):
 
     def parse(self, raw):
         self._config.readfp(StringIO(raw))
+
+    def medias(self):
+        from mdv.hdlist import MediaInfo
+        for section in self._config.sections():
+            fields = section.split()
+            if len(fields) != 2 or fields[0] != "distro":
+                continue
+            distro = fields[1]
+            for option in self._config.options(section):
+                media = MediaInfo()
+                rawconf = self._config.get(section, option)
+                conffields = rawconf.split(None, 2)
+                if not conffields:
+                    continue
+                path = conffields[0]
+                if len(conffields) == 2:
+                    hdlist = conffields[1]
+                else:
+                    hdlist = "media_info/synthesis.hdlist.cz"
+                media.hdlist = os.path.join(path, hdlist)
+                media.name = option
+                yield media, distro
 
     def load(self, path):
         """Load the configuration file in the given path"""
@@ -272,6 +299,145 @@ class CVE:
     def __repr__(self):
         return yaml().dump(self.__dict__, default_flow_style=False)
 
+class Media:
+
+    id = None
+    name = None
+    distro = None
+    timestamp = None
+    hot = False
+
+class PackagePool:
+
+    def __init__(self, dbpath):
+        self.dbpath = dbpath
+        self._conn = None
+        self._medias = {}
+
+    def _create_db(self):
+        import sqlite3
+        stmt = """
+        CREATE TABLE pkg (
+            id INTEGER PRIMARY KEY,
+            name TEXT,
+            evr TEXT,
+            provides TEXT,
+            requires TEXT,
+            summary TEXT,
+            media_id INTEGER
+            );
+
+        CREATE TABLE media (
+            id INTEGER PRIMARY KEY,
+            name TEXT,
+            distro TEXT,
+            timestamp INTEGER);
+
+        CREATE INDEX pkg_name ON pkg (name);
+        CREATE INDEX pkg_media_id ON pkg (media_id);
+        CREATE INDEX media_match ON media (name, distro);
+        """
+        self._conn = sqlite3.connect(self.dbpath)
+        cur = self._conn.cursor()
+        cur.executescript(stmt)
+        self._conn.commit()
+        self._conn.close()
+
+    def open(self):
+        import sqlite3
+        if not os.path.exists(self.dbpath):
+            self._create_db()
+        self._conn = sqlite3.connect(self.dbpath)
+        log.debug("opened package database at %s", self.dbpath)
+        self.open = lambda: None
+
+    def add_media(self, name, distro):
+        self.open()
+        stmt = """INSERT INTO MEDIA (name, distro, timestamp)
+                  VALUES (?, ?, 0)"""
+        cur = self._conn.cursor()
+        cur.execute(stmt, (name, distro))
+        self._conn.commit()
+
+    def _media(self, medianame, distro):
+        self.open()
+        mediainfo = (medianame, distro)
+        try:
+            media = self._medias[mediainfo]
+        except KeyError:
+            media = Media()
+            stmt = """SELECT id, name, distro, timestamp
+                      FROM media
+                      WHERE name = ? and distro = ?"""
+            cur = self._conn.cursor()
+            try:
+                if not isinstance(mediainfo[0], basestring):
+                    import pdb; pdb.set_trace()
+                res = cur.execute(stmt, mediainfo).next()
+                (media.id, media.name, media.distro, media.timestamp) = res
+            except StopIteration:
+                self.add_media(medianame, distro)
+                try:
+                    res = cur.execute(stmt, mediainfo).next()
+                    (media.id, media.name, media.distro, media.timestamp) = res
+                    media.hot = True
+                except StopIteration:
+                    raise PackageError, "failed to insert media"
+        self._medias[mediainfo] = media
+        return media
+
+    def _purge_media(self, name, distro):
+        media = self._media(name, distro)
+        stmt = "DELETE FROM pkg WHERE media_id = ?"
+        cur = self._conn.cursor()
+        cur.execute(stmt, (media.id,))
+        self._medias.pop((name, distro))
+        stmt = "DELETE FROM media WHERE id = ?"
+        cur.execute(stmt, (media.id,))
+        self._conn.commit()
+
+    def _update_timestamp(self, medianame, distro):
+        stmt = "UPDATE media SET timestamp = ? WHERE id = ?"
+        media = self._media(medianame, distro)
+        cur = self._conn.cursor()
+        timestamp = int(math.ceil(time.time()))
+        cur.execute(stmt, (timestamp, media.id))
+
+    def pull(self, pkgiter, medianame, distro, timestamp):
+        media = self._media(medianame, distro)
+        if timestamp <= media.timestamp:
+            return
+        if not media.hot:
+            self._purge_media(medianame, distro)
+        for pkg in pkgiter:
+            self._put(pkg, medianame, distro)
+            yield True
+        self._update_timestamp(medianame, distro)
+        self._conn.commit()
+
+    def _put(self, pkg, medianame, distro):
+        self.open()
+        cur = self._conn.cursor()
+        stmt = """
+            INSERT INTO pkg (
+                name, evr, provides, requires, summary, media_id)
+            VALUES (?, ?, ?, ?, ?, ?);
+        """
+        provides = "@".join(pkg.provides)
+        requires = "@".join(pkg.requires)
+        self._conn.text_factory = str
+        media = self._media(medianame, distro)
+        pars = (pkg.name, pkg.evr, provides, requires, pkg.summary,
+                media.id)
+        cur.execute(stmt, pars)
+
+    def get(self, name):
+        self.open()
+        raise NotImplementedError
+
+    def close(self):
+        self._conn.close()
+
 class TicketSource:
 
     def __init__(self, cvesource, cachepath, base, config):
@@ -314,7 +480,9 @@ class Paths:
     def _config_path(self, path):
         return os.path.expanduser(path)
 
-    def _workdir_file(self, name_or_path):
+    def _workdir_file(self, name_or_path, tmp=False):
+        if tmp:
+            return self._workdir_file(name_or_path) + ".tmp"
         return os.path.join(self.workdir(),
                 self._config_path(name_or_path))
 
@@ -322,9 +490,10 @@ class Paths:
         return self._config_path(self.config.sekt.workdir)
 
     def cve_database(self, tmp=False):
-        if tmp:
-            return self.cve_database() + ".tmp"
-        return self._workdir_file(self.config.sekt.cve_database)
+        return self._workdir_file(self.config.sekt.cve_database, tmp)
+
+    def packages_database(self, tmp=False):
+        return self._workdir_file(self.config.sekt.packages_database, tmp)
 
     def cve_info(self):
         return self._workdir_file(self.config.sekt.cve_info)
@@ -360,6 +529,25 @@ class SecteamTasks:
             new = cves.put_xml(chunk)
             yield new
         cves.close()
+
+    def pull_packages(self):
+        from mdv.hdlist import HdlistParser
+        path = self.paths.packages_database()
+        pool = PackagePool(path)
+        def pkgiter(parser):
+            while True:
+                pkg = parser.next()
+                if not pkg:
+                    break
+                yield pkg
+        for media, distro in self.config.medias():
+            yield "parsing", (distro, media.name)
+            parser = HdlistParser(media.hdlist)
+            parseriter = pkgiter(parser)
+            pulliter = pool.pull(parseriter, media.name, distro, parser.timestamp)
+            for _ in pulliter:
+                yield "progress", parser.progress()
+        pool.close()
 
     def init(self):
         path = self.paths.workdir()
@@ -416,6 +604,23 @@ class Interface:
                 print i
         if show:
             print "%d parsed, %d new" % (i, newcount)
+
+    def pull_packages(self):
+        prev = 0
+        show = os.isatty(1)
+        for status, args in self.tasks.pull_packages():
+            if show:
+                if status == "progress":
+                    progress = args
+                    rounded = math.ceil(progress)
+                    if rounded % 2.0 == 0 and rounded > prev:
+                        prev = rounded
+                        print ("%d%%\r" % progress),
+                        sys.stdout.flush()
+                        if prev >= 100:
+                            prev = 0
+                elif status in ("parsing", "skiping"):
+                    print status, args[0], args[1]
 
     def init(self):
         if self.tasks.init():
