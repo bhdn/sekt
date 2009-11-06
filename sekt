@@ -24,6 +24,8 @@ def parse_options(args):
             help="Pull packages from medias")
     parser.add_option("--cve", type="string", default=None,
             help="show information about a given CVE")
+    parser.add_option("--pkg", type="string", default=None,
+            help="find for a package (as in urpmq -y)")
     parser.add_option("--cve-keywords", type="string", default=None,
             help="show matching keywords for CVEs")
     parser.add_option("-e", "--easy-tickets", action="store_true",
@@ -59,6 +61,8 @@ def run(options, args):
                 interface.pull_packages()
             if options.cve:
                 interface.dump_cve(options)
+            if options.pkg:
+                interface.find_packages(options)
             if options.cve_keywords:
                 interface.correlate_cves_packages(options)
             if options.easy_tickets:

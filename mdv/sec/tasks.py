@@ -437,6 +437,25 @@ class PackagePool:
         cur = self._conn.cursor()
         return (name for (name,) in cur.execute(stmt))
 
+    def find_packages(self, name_glob):
+        from mdv.hdlist import Package
+        self.open()
+        stmt = """SELECT pkg.name, pkg.evr,
+                      media.name AS media, media.distro AS distro
+                  FROM pkg, media
+                  WHERE
+                      pkg.name GLOB ?
+                      AND media.id == pkg.media_id"""
+        glob = "*" + name_glob + "*"
+        cur = self._conn.cursor()
+        for res in cur.execute(stmt, (glob,)):
+            pkg = Package()
+            (pkg.name, pkg.evr,
+                    medianame, distro) = res
+            #pkg.provides = rawprovides.split("@")
+            #pkg.requires = rawrequires.split("@")
+            yield pkg, medianame, distro
+
     def get(self, name):
         self.open()
         raise NotImplementedError
@@ -579,6 +598,11 @@ class SecteamTasks:
             else:
                 yield "N", cve.cveid
 
+    def find_packages(self, name):
+        self.open_stuff()
+        for pkg, media, distro in self.packages.find_packages(name_glob=name):
+            yield pkg.name, pkg.evr, media, distro
+
     def init(self):
         path = self.paths.workdir()
         if os.path.exists(path):
@@ -656,6 +680,19 @@ class Interface:
         for status, args in self.tasks.correlate_cves_packages(options.cve_keywords):
             if status == "F":
                 print status, args[0], " ".join(args[1])
+
+    def find_packages(self, options):
+        format = "%s %s %s %s"
+        if os.isatty(1):
+            import commands
+            _, rawcols = commands.getoutput('stty size').split()
+            if rawcols:
+                cols = int(rawcols)
+                space = cols / 3
+                format = "%%-%ds %%-%ds %%-%ds %%s" % (space, space,
+                        space - 15)
+        for name, version, media, distro in self.tasks.find_packages(options.pkg):
+            print format % (name, version, media, distro)
 
     def init(self):
         if self.tasks.init():
