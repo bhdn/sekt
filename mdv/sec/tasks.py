@@ -207,7 +207,7 @@ class CVEPool:
     @classmethod
     def from_yaml(klass, rawyaml):
         cve = CVE(None)
-        cve.__dict__.update(yaml().parse(rawyaml))
+        cve.__dict__.update(yaml().load(rawyaml))
         return cve
 
     def _fix_prepend(self, cveid):
@@ -431,6 +431,12 @@ class PackagePool:
                 media.id)
         cur.execute(stmt, pars)
 
+    def package_names(self):
+        self.open()
+        stmt = "SELECT DISTINCT name FROM pkg"
+        cur = self._conn.cursor()
+        return (name for (name,) in cur.execute(stmt))
+
     def get(self, name):
         self.open()
         raise NotImplementedError
@@ -510,11 +516,13 @@ class SecteamTasks:
         self.config = config
         self.paths = Paths(config)
         self.cves = None
+        self.packages = None
         self.tickets = None
 
     def open_stuff(self):
         self.cves = CVEPool(self.paths.cve_database(),
                 self.paths.cve_info())
+        self.packages = PackagePool(self.paths.packages_database())
         #self.tickets = TicketSource(self.cvesource,
         #        self.config.ticket_cache, self.config.bugzilla_base_url,
         #        self.config)
@@ -548,6 +556,28 @@ class SecteamTasks:
             for _ in pulliter:
                 yield "progress", parser.progress()
         pool.close()
+
+    def correlate_cves_packages(self, cvename):
+        self.open_stuff()
+        names = frozenset(name.lower() for name in self.packages.package_names())
+        exceptions = frozenset(["which", "file", "flood", "time", "root",
+                               "check", "menu", "buffer", "dump", "listen",
+                               "patch", "null", "at", "up", "connect",
+                               "open"])
+
+        def split_words(descr):
+            found = []
+            for rawword in cve.description.split():
+                simple = "".join(ch for ch in rawword if ch.isalnum())
+                found.append(simple.lower())
+            return frozenset(found)
+        for cve in self.cves.find_cve(cvename):
+            keywords = split_words(cve.description)
+            found = names.intersection(keywords) - exceptions
+            if found:
+                yield "F", (cve.cveid, found)
+            else:
+                yield "N", cve.cveid
 
     def init(self):
         path = self.paths.workdir()
@@ -621,6 +651,11 @@ class Interface:
                             prev = 0
                 elif status in ("parsing", "skiping"):
                     print status, args[0], args[1]
+
+    def correlate_cves_packages(self, options):
+        for status, args in self.tasks.correlate_cves_packages(options.cve_keywords):
+            if status == "F":
+                print status, args[0], " ".join(args[1])
 
     def init(self):
         if self.tasks.init():
