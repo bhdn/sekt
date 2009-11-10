@@ -371,8 +371,6 @@ class PackagePool:
                       WHERE name = ? and distro = ?"""
             cur = self._conn.cursor()
             try:
-                if not isinstance(mediainfo[0], basestring):
-                    import pdb; pdb.set_trace()
                 res = cur.execute(stmt, mediainfo).next()
                 (media.id, media.name, media.distro, media.timestamp) = res
             except StopIteration:
