@@ -13,6 +13,8 @@ Tasks that could be implemented in sekt:
 - automatically generate advisory messages based on the messages from the
   CVEs associated in each advisory ticket
 - bind advisory tickets to MDVSA (or MDVAs) numbers
+- bind stable kernel releases with CVE fixes (in order to ease generating
+  the kernel update changelog)
 
 What it can't do:
 
