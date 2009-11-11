@@ -36,7 +36,7 @@ valid_status = OPEN NEW INVALID FIXED RELEASED WONTFIX
 
 [conf]
 path_environment = SEKT_CONF
-user_file = .sekt
+user_file = .sekt.conf
 """
 
 log = logging.getLogger("sekt")
