@@ -441,7 +441,7 @@ class PackagePool:
         cur = self._conn.cursor()
         return (name for (name,) in cur.execute(stmt))
 
-    def find_packages(self, name_glob):
+    def find_packages(self, name_glob, distro=None):
         from mdv.hdlist import Package
         self.open()
         stmt = """SELECT pkg.name, pkg.evr,
@@ -451,8 +451,12 @@ class PackagePool:
                       pkg.name GLOB ?
                       AND media.id == pkg.media_id"""
         glob = "*" + name_glob + "*"
+        params = [glob]
+        if distro:
+            stmt += " AND media.distro == ?"
+            params.append(distro)
         cur = self._conn.cursor()
-        for res in cur.execute(stmt, (glob,)):
+        for res in cur.execute(stmt, params):
             pkg = Package()
             (pkg.name, pkg.evr,
                     medianame, distro) = res
@@ -786,9 +790,10 @@ class SecteamTasks:
             else:
                 yield "N", cve.cveid
 
-    def find_packages(self, name):
+    def find_packages(self, name, distro=None):
         self.open_stuff()
-        for pkg, media, distro in self.packages.find_packages(name_glob=name):
+        gen = self.packages.find_packages(name_glob=name, distro=distro)
+        for pkg, media, distro in gen:
             yield pkg.name, pkg.evr, media, distro
 
     def find_kernel_commit(self, message):
@@ -891,7 +896,8 @@ class Interface:
                 space = cols / 3
                 format = "%%-%ds %%-%ds %%-%ds %%s" % (space, space,
                         space - 15)
-        for name, version, media, distro in self.tasks.find_packages(options.pkg):
+        gen = self.tasks.find_packages(options.pkg, distro=options.distro)
+        for name, version, media, distro in gen:
             print format % (name, version, media, distro)
 
     def find_kernel_commit(self, options):

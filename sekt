@@ -34,6 +34,8 @@ def parse_options(args):
             help="show matching keywords for CVEs")
     parser.add_option("--kci", type="string", default=None,
             help="find kernel releases with a given commit message")
+    parser.add_option("--distro", type="string", default=None,
+            help="filter by distro name (when applicable)")
     parser.add_option("-e", "--easy-tickets", action="store_true",
             default=False, help="show easy to fix tickets")
     parser.add_option("-s", "--status", action="store_true", default=False,
