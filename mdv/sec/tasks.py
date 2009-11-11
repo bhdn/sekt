@@ -31,6 +31,12 @@ packages_database = packages.sqlite
 cve_info = cves-metadata.shelve
 bugzilla_base_url = https://qa.mandriva.com
 
+[kernel_changelogs]
+database = kernel-changelogs.sqlite
+logs_dir = kernel-changelogs
+download_command = wget --quiet -P $dest -nc '$url'
+url = ftp://ftp.kernel.org/pub/linux/kernel/v2.6/ChangeLog-*
+
 [cve]
 valid_status = OPEN NEW INVALID FIXED RELEASED WONTFIX
 
@@ -461,6 +467,171 @@ class PackagePool:
     def close(self):
         self._conn.close()
 
+class KernelChangelogPool:
+
+    def __init__(self, topdir, dbpath, config, paths):
+        self.topdir = topdir
+        self.dbpath = dbpath
+        self.config = config
+        self.paths = paths
+        self._conn = None
+        self._versions = {}
+
+    def open(self):
+        import sqlite3
+        if not os.path.exists(self.topdir):
+            os.mkdir(self.topdir)
+        if not os.path.exists(self.dbpath):
+            self._create_db()
+        self._conn = sqlite3.connect(self.dbpath)
+        self._open = lambda: None
+
+    def close(self):
+        if self._conn:
+            self._conn.close()
+
+    def _create_db(self):
+        import sqlite3
+        stmt = """
+        CREATE TABLE metadata (
+            last_pull INTEGER
+        );
+        CREATE TABLE changelog (
+            id INTEGER PRIMARY KEY,
+            version TEXT
+        );
+        CREATE TABLE kernel_commit (
+            commitid TEXT PRIMARY KEY,
+            title TEXT,
+            changelog_id INTEGER
+        );
+
+        CREATE INDEX changelog_version ON changelog (version);
+        CREATE INDEX kernel_commit_title ON kernel_commit (title);
+
+        INSERT INTO metadata (last_pull) VALUES (0);
+        """
+        self._conn = sqlite3.connect(self.dbpath)
+        cur = self._conn.cursor()
+        cur.executescript(stmt)
+        self._conn.commit()
+        self._conn.close()
+
+    def _last_pull(self):
+        stmt = "SELECT DISTINCT last_pull from metadata"
+        cur = self._conn.cursor()
+        try:
+            last_pull, = cur.execute(stmt).next()
+        except StopIteration:
+            log.debug("no last changelog pull, returning 0")
+            return 0
+        return last_pull
+
+    def download(self):
+        from string import Template
+        import subprocess
+        rawtempl = self.config.kernel_changelogs.download_command
+        url = self.config.kernel_changelogs.url
+        dest = self.paths.kernel_changelogs_dir()
+        cmd = Template(rawtempl).substitute({"dest": dest, "url": url})
+        log.debug("running %s", cmd)
+        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT)
+        p.wait()
+        if p.returncode != 0:
+            output = p.stdout.read()
+            raise PullError, "download failed: %s: %s" % (cmd, output)
+
+    def _changelog_id(self, version):
+        try:
+            version_id = self._versions[version]
+        except KeyError:
+            stmt = "SELECT DISTINCT id FROM changelog WHERE version = ?"
+            cur = self._conn.cursor()
+            version_id, = cur.execute(stmt, (version,)).next()
+            self._versions[version] = version_id
+        return version_id
+
+    def _insert_changelog(self, version):
+        stmt = "INSERT INTO changelog (version) VALUES (?)"
+        cur = self._conn.cursor()
+        self._conn.text_factory = str
+        cur.execute(stmt, (version,))
+
+    def _insert(self, version, commit, firstline):
+        stmt = """
+            INSERT INTO kernel_commit (commitid, title, changelog_id)
+            VALUES (?, ?, ?)"""
+        cur = self._conn.cursor()
+        self._conn.text_factory = str
+        changelog_id = self._changelog_id(version)
+        cur.execute(stmt, (commit, firstline, changelog_id))
+
+    def _update_pull_timestamp(self):
+        stmt = "UPDATE metadata SET last_pull = ?"
+        last = int(math.ceil(time.time()))
+        cur = self._conn.cursor()
+        cur.execute(stmt, (last,))
+
+    def put(self, version, logstream):
+        self._insert_changelog(version)
+        commit = None
+        log = []
+        first = None
+        for line in logstream:
+            line = line.rstrip()
+            if not line:
+                continue
+            if not line[0].isspace():
+                if first:
+                    self._insert(version, commit, first)
+                    log[:] = []
+                    commit = None
+                    first = None
+                if line.startswith("commit "):
+                    fields = line.split()
+                    if len(fields) > 1:
+                        commit = fields[1]
+            else:
+                if not first:
+                    first = line.lstrip()
+                log.append(line)
+        if first:
+            self._insert(version, commit, first)
+
+    def parse(self):
+        self.open()
+        last = self._last_pull()
+        dir = self.paths.kernel_changelogs_dir()
+        for name in os.listdir(dir):
+            path = os.path.join(dir, name)
+            stat = os.stat(path)
+            if stat.st_mtime > last:
+                f = open(path)
+                version = name[len("ChangeLog-"):]
+                yield name, version
+                self.put(version, f)
+                f.close()
+            self._update_pull_timestamp()
+            self._conn.commit()
+
+    def pull(self):
+        self.download()
+        self.parse()
+
+    def find_commit(self, message):
+        self.open()
+        stmt = """
+            SELECT commitid, version
+            FROM changelog, kernel_commit
+            WHERE
+                kernel_commit.title = ?
+                AND kernel_commit.changelog_id = changelog.id
+        """
+        cur = self._conn.cursor()
+        res = cur.execute(stmt, (message,))
+        return res
+
 class TicketSource:
 
     def __init__(self, cvesource, cachepath, base, config):
@@ -521,6 +692,12 @@ class Paths:
     def cve_info(self):
         return self._workdir_file(self.config.sekt.cve_info)
 
+    def kernel_changelogs_dir(self):
+        return self._workdir_file(self.config.kernel_changelogs.logs_dir)
+
+    def kernel_changelogs_database(self):
+        return self._workdir_file(self.config.kernel_changelogs.database)
+
 class SecteamTasks:
 
     class Reasons:
@@ -534,12 +711,16 @@ class SecteamTasks:
         self.paths = Paths(config)
         self.cves = None
         self.packages = None
+        self.kernel_changelogs = None
         self.tickets = None
 
     def open_stuff(self):
         self.cves = CVEPool(self.paths.cve_database(),
                 self.paths.cve_info())
         self.packages = PackagePool(self.paths.packages_database())
+        self.kernel_changelogs = KernelChangelogPool(self.paths.kernel_changelogs_dir(),
+                                                self.paths.kernel_changelogs_database(),
+                                                self.config, self.paths)
         #self.tickets = TicketSource(self.cvesource,
         #        self.config.ticket_cache, self.config.bugzilla_base_url,
         #        self.config)
@@ -574,6 +755,14 @@ class SecteamTasks:
                 yield "progress", parser.progress()
         pool.close()
 
+    def parse_kernel_changelogs(self):
+        dir = self.paths.kernel_changelogs_dir()
+        dbpath = self.paths.kernel_changelogs_database()
+        pool = KernelChangelogPool(dir, dbpath, self.config, self.paths)
+        for name in pool.parse():
+            yield name
+        pool.close()
+
     def correlate_cves_packages(self, cvename):
         self.open_stuff()
         names = frozenset(name.lower() for name in self.packages.package_names())
@@ -601,6 +790,14 @@ class SecteamTasks:
         self.open_stuff()
         for pkg, media, distro in self.packages.find_packages(name_glob=name):
             yield pkg.name, pkg.evr, media, distro
+
+    def find_kernel_commit(self, message):
+        self.open_stuff()
+        return self.kernel_changelogs.find_commit(message)
+
+    def fetch_kernel_changelogs(self):
+        self.open_stuff()
+        self.kernel_changelogs.download()
 
     def init(self):
         path = self.paths.workdir()
@@ -675,6 +872,10 @@ class Interface:
                 elif status in ("parsing", "skiping"):
                     print status, args[0], args[1]
 
+    def parse_kernel_changelogs(self):
+        for name in self.tasks.parse_kernel_changelogs():
+            print name
+
     def correlate_cves_packages(self, options):
         for status, args in self.tasks.correlate_cves_packages(options.cve_keywords):
             if status == "F":
@@ -692,6 +893,14 @@ class Interface:
                         space - 15)
         for name, version, media, distro in self.tasks.find_packages(options.pkg):
             print format % (name, version, media, distro)
+
+    def find_kernel_commit(self, options):
+        msg = options.kci
+        for version, commit in self.tasks.find_kernel_commit(msg):
+            print version, commit
+
+    def fetch_kernel_changelogs(self):
+        self.tasks.fetch_kernel_changelogs()
 
     def init(self):
         if self.tasks.init():

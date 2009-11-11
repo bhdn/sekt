@@ -1,1 +1,2 @@
 curl -s http://cve.mitre.org/data/downloads/allitems.xml.gz | zcat | ./sekt --pull-cves
+./sekt --fetch-kernel-changelogs --parse-kernel-changelogs
