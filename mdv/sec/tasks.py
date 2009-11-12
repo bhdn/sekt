@@ -441,7 +441,7 @@ class PackagePool:
         cur = self._conn.cursor()
         return (name for (name,) in cur.execute(stmt))
 
-    def find_packages(self, name_glob, distro=None):
+    def find_packages(self, name_glob, media=None, distro=None):
         from mdv.hdlist import Package
         self.open()
         stmt = """SELECT pkg.name, pkg.evr,
@@ -452,6 +452,10 @@ class PackagePool:
                       AND media.id == pkg.media_id"""
         glob = "*" + name_glob + "*"
         params = [glob]
+        if media:
+            stmt += " AND media.name GLOB ?"
+            mediaglob = "*" + media + "*"
+            params.append(mediaglob)
         if distro:
             stmt += " AND media.distro == ?"
             params.append(distro)
@@ -790,9 +794,9 @@ class SecteamTasks:
             else:
                 yield "N", cve.cveid
 
-    def find_packages(self, name, distro=None):
+    def find_packages(self, name, media=None, distro=None):
         self.open_stuff()
-        gen = self.packages.find_packages(name_glob=name, distro=distro)
+        gen = self.packages.find_packages(name_glob=name, media=media, distro=distro)
         for pkg, media, distro in gen:
             yield pkg.name, pkg.evr, media, distro
 
@@ -896,7 +900,8 @@ class Interface:
                 space = cols / 3
                 format = "%%-%ds %%-%ds %%-%ds %%s" % (space, space,
                         space - 15)
-        gen = self.tasks.find_packages(options.pkg, distro=options.distro)
+        gen = self.tasks.find_packages(options.pkg, media=options.media,
+                distro=options.distro)
         for name, version, media, distro in gen:
             print format % (name, version, media, distro)
 
