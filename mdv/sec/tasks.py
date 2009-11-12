@@ -199,10 +199,14 @@ class CVEPool:
             return None
         return rawyaml
 
-    def find_cve(self, cveid, dump=False):
+    def find_cve(self, cveid, strict=False, dump=False):
         import glob
         cveid = self._fix_prepend(cveid)
-        expr = "%s/*/%s*" % (self.dbpath, cveid)
+        if strict:
+            fmt = "%s/*/%s"
+        else:
+            fmt = "%s/*/%s*"
+        expr = fmt % (self.dbpath, cveid)
         for path in glob.iglob(expr):
             rawyaml = open(path).read()
             if dump:
@@ -441,20 +445,28 @@ class PackagePool:
         cur = self._conn.cursor()
         return (name for (name,) in cur.execute(stmt))
 
-    def find_packages(self, name_glob, media=None, distro=None):
+    def find_packages(self, name_glob, media=None, distro=None,
+            strict=False):
         from mdv.hdlist import Package
         self.open()
         stmt = """SELECT pkg.name, pkg.evr,
                       media.name AS media, media.distro AS distro
                   FROM pkg, media
-                  WHERE
-                      pkg.name GLOB ?
-                      AND media.id == pkg.media_id"""
-        glob = "*" + name_glob + "*"
+                  WHERE media.id == pkg.media_id """
+        if strict:
+            glob = name_glob
+            stmt += " AND pkg.name == ?"
+        else:
+            stmt += " AND pkg.name GLOB ?"
+            glob = "*" + name_glob + "*"
         params = [glob]
         if media:
-            stmt += " AND media.name GLOB ?"
-            mediaglob = "*" + media + "*"
+            if strict:
+                stmt += " AND media.name == ?"
+                mediaglob = media
+            else:
+                stmt += " AND media.name GLOB ?"
+                mediaglob = "*" + media + "*"
             params.append(mediaglob)
         if distro:
             stmt += " AND media.distro == ?"
@@ -627,15 +639,18 @@ class KernelChangelogPool:
         self.download()
         self.parse()
 
-    def find_commit(self, message):
+    def find_commit(self, message, fuzzy=False):
         self.open()
         stmt = """
-            SELECT commitid, version
+            SELECT commitid, version, title
             FROM changelog, kernel_commit
             WHERE
-                kernel_commit.title = ?
-                AND kernel_commit.changelog_id = changelog.id
-        """
+                kernel_commit.changelog_id = changelog.id """
+        if fuzzy:
+            message = "*" + message + "*"
+            stmt += " AND kernel_commit.title GLOB ?"
+        else:
+            stmt += " AND kernel_commit.title = ?"
         cur = self._conn.cursor()
         res = cur.execute(stmt, (message,))
         return res
@@ -794,15 +809,16 @@ class SecteamTasks:
             else:
                 yield "N", cve.cveid
 
-    def find_packages(self, name, media=None, distro=None):
+    def find_packages(self, name, media=None, distro=None, strict=False):
         self.open_stuff()
-        gen = self.packages.find_packages(name_glob=name, media=media, distro=distro)
+        gen = self.packages.find_packages(name_glob=name, media=media,
+                distro=distro, strict=strict)
         for pkg, media, distro in gen:
             yield pkg.name, pkg.evr, media, distro
 
-    def find_kernel_commit(self, message):
+    def find_kernel_commit(self, message, fuzzy=False):
         self.open_stuff()
-        return self.kernel_changelogs.find_commit(message)
+        return self.kernel_changelogs.find_commit(message, fuzzy=fuzzy)
 
     def fetch_kernel_changelogs(self):
         self.open_stuff()
@@ -816,14 +832,14 @@ class SecteamTasks:
         os.mkdir(path)
         return True
 
-    def dump_cve(self, cveid):
+    def dump_cve(self, cveid, strict=False):
         self.open_stuff()
         dump = self.cves.get_dump(cveid)
         return dump
 
-    def find_cve(self, cveid, dump=False):
+    def find_cve(self, cveid, strict=False, dump=False):
         self.open_stuff()
-        return self.cves.find_cve(cveid, dump)
+        return self.cves.find_cve(cveid, strict=strict, dump=dump)
 
     def finish(self):
         if self.cves:
@@ -886,7 +902,9 @@ class Interface:
             print name
 
     def correlate_cves_packages(self, options):
-        for status, args in self.tasks.correlate_cves_packages(options.cve_keywords):
+        cvegen = self.tasks.correlate_cves_packages(options.cve_keywords,
+                strict=options.strict)
+        for status, args in cvegen:
             if status == "F":
                 print status, args[0], " ".join(args[1])
 
@@ -901,14 +919,15 @@ class Interface:
                 format = "%%-%ds %%-%ds %%-%ds %%s" % (space, space,
                         space - 15)
         gen = self.tasks.find_packages(options.pkg, media=options.media,
-                distro=options.distro)
+                distro=options.distro, strict=options.strict)
         for name, version, media, distro in gen:
             print format % (name, version, media, distro)
 
     def find_kernel_commit(self, options):
-        msg = options.kci
-        for version, commit in self.tasks.find_kernel_commit(msg):
-            print version, commit
+        findgen = self.tasks.find_kernel_commit(options.kci,
+                fuzzy=options.fuzzy)
+        for commit, version, message in findgen:
+            print commit, version, message
 
     def fetch_kernel_changelogs(self):
         self.tasks.fetch_kernel_changelogs()
@@ -929,7 +948,8 @@ class Interface:
             dump = None
         if dump is None:
             try:
-                found = self.tasks.find_cve(options.cve, dump=True)
+                found = self.tasks.find_cve(options.cve,
+                        strict=options.strict, dump=True)
                 if os.isatty(1):
                     import subprocess
                     p = subprocess.Popen(["less"], stdin=subprocess.PIPE)
