@@ -1,0 +1,45 @@
+A tour over sekt features
+=========================
+
+Updating medias:
+
+  $ cat sekt.conf
+  [distro 2006.0]
+  i586/main/release = /storage/official/2006.0/i586/media/main
+  i586/main/updates = /storage/update/2006.0/RPMS/
+  i586/contrib/release = /storage/official/2006.0/i586/media/contrib/
+
+  $ sekt --pull-medias 
+  
+  $ sekt --pkg repsys
+  repsys 1.5.3.1-3mdk.i586 i586/contrib/release 2006.0
+
+  # added more medias, all medias, ideally
+  $ sekt --pkg dkms-
+  dkms-broadcom-wl 5.10.27.12-1mdv2009.0.x86_64 x86_64/non-free/backports 2009.0
+  dkms-nvidia-current 190.42-1mdv2009.0.x86_64 x86_64/non-free/backports 2009.0
+  dkms-fglrx 8.661-1mdv2009.0.x86_64 x86_64/non-free/backports 2009.0
+  dkms-unionfs 1.4-2mdv2009.0.x86_64 x86_64/main/release 2009.0
+  dkms-em8300 0.17.0-2.hg611.1mdv2009.0.x86_64 x86_64/main/release 2009.0
+  ...
+  # lots of packages
+
+  $ sekt --pkg dkms- --distro 2007.1
+  dkms-nvidia96xx 1.0-9639.4mdv2007.1.x86_64 x86_64/non-free/backports 2007.1
+  dkms-nvidia71xx 1.0-7185.5mdv2007.1.x86_64 x86_64/non-free/backports 2007.1
+  dkms-nvidia97xx 169.12-1mdv2007.1.x86_64 x86_64/non-free/backports 2007.1
+  dkms-ati 8.471-1mdv2007.1.x86_64 x86_64/non-free/backports 2007.1
+  dkms-minimal 2.0.16-1mdv2007.1.noarch x86_64/main/release 2007.1
+  dkms 2.0.16-1mdv2007.1.noarch x86_64/main/release 2007.1
+  ...
+  # not so many
+
+  $ ./sekt --pkg dkms --distro 2007.1 --media i586/main
+  dkms-minimal 2.0.16-1mdv2007.1.noarch i586/main/release 2007.1
+  dkms 2.0.16-1mdv2007.1.noarch i586/main/release 2007.1
+  dkms-libafs 1.4.2-3mdv2007.1.i586 i586/main/release 2007.1
+  dkms-lirc 0.8.1-0.20061104.3mdv2007.1.i586 i586/main/release 2007.1
+  dkms-kqemu 1.3.0-0.pre11.2mdv2007.1.i586 i586/main/release 2007.1
+  # ok, far less
+
+
