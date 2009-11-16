@@ -210,7 +210,8 @@ class CVEPool:
         for path in glob.iglob(expr):
             rawyaml = open(path).read()
             if dump:
-                yield rawyaml
+                cveid = os.path.basename(path)
+                yield cveid, rawyaml
             else:
                 yield self.from_yaml(rawyaml)
 
@@ -655,6 +656,46 @@ class KernelChangelogPool:
         res = cur.execute(stmt, (message,))
         return res
 
+    def list_versions(self):
+        self.open()
+        stmt = "SELECT DISTINCT version FROM changelog"
+        cur = self._conn.cursor()
+        return (version for version, in cur.execute(stmt))
+
+    def find_commits(self, version):
+        self.open()
+        stmt = """
+            SELECT commitid, title
+            FROM changelog, kernel_commit
+            WHERE changelog.version = ?
+                AND changelog_id = changelog.id
+            """
+        cur = self._conn.cursor()
+        pars = (version,)
+        return cur.execute(stmt, pars)
+
+    def find_like_commits(self, commit, version):
+        self.open()
+        stmt = """
+            SELECT ci2.commitid, ci2.title
+            FROM changelog, kernel_commit AS ci1, kernel_commit AS ci2
+            WHERE
+                ci1.commitid = ?
+                AND ci1.title = ci2.title
+                AND changelog.version = ?
+                AND ci2.changelog_id = changelog.id
+            """
+        parms = (commit, version)
+        cur = self._conn.cursor()
+        return cur.execute(stmt, parms)
+
+    def get_message(self, commit):
+        self.open()
+        stmt = "SELECT title FROM kernel_commit WHERE commitid = ?"
+        parms = (commit,)
+        cur = self._conn.cursor()
+        return cur.execute(stmt, parms)
+
 class TicketSource:
 
     def __init__(self, cvesource, cachepath, base, config):
@@ -786,7 +827,7 @@ class SecteamTasks:
             yield name
         pool.close()
 
-    def correlate_cves_packages(self, cvename):
+    def correlate_cves_packages(self, cvename, strict=False):
         self.open_stuff()
         names = frozenset(name.lower() for name in self.packages.package_names())
         exceptions = frozenset(["which", "file", "flood", "time", "root",
@@ -801,7 +842,7 @@ class SecteamTasks:
                 simple = "".join(ch for ch in rawword if ch.isalnum())
                 found.append(simple.lower())
             return frozenset(found)
-        for cve in self.cves.find_cve(cvename):
+        for cve in self.cves.find_cve(cvename, strict=strict):
             keywords = split_words(cve.description)
             found = find.intersection(keywords) - exceptions
             if found:
@@ -823,6 +864,40 @@ class SecteamTasks:
     def fetch_kernel_changelogs(self):
         self.open_stuff()
         self.kernel_changelogs.download()
+
+    def list_kernel_releases(self):
+        self.open_stuff()
+        return self.kernel_changelogs.list_versions()
+
+    def list_kernel_commits(self, version):
+        self.open_stuff()
+        return self.kernel_changelogs.find_commits(version)
+
+    def find_kernel_cves(self, version, cvepattern=None):
+        # tries to find all CVEs that have references to commits from this
+        # release
+        import re
+        expr = re.compile("git\.kernel\.org/(?:.*h=|linus/)(?P<ci>[0-9a-f]+)")
+        self.open_stuff()
+        cis = self.kernel_changelogs.find_commits(version)
+        allcommits = dict(cis)
+        ids = allcommits.keys()
+        cvecommits = set()
+        print "* looking for direct references to commits in CVE references"
+        for cveid, rawcve in self.cves.find_cve(cvepattern, dump=True):
+            match = [id for id in ids if id in rawcve]
+            if match:
+                for cimatch in match:
+                    yield (cimatch, cveid,
+                            self.kernel_changelogs.get_message(cimatch))
+            for found in expr.finditer(rawcve):
+                foundci = found.group("ci")
+                cvecommits.add((cveid, foundci))
+        print "* looking for CVE commits with same title in the version %s" % version
+        for cveid, ci in cvecommits:
+            for ci2, title in self.kernel_changelogs.find_like_commits(ci,
+                    version):
+                yield ci2, cveid, title
 
     def init(self):
         path = self.paths.workdir()
@@ -932,6 +1007,19 @@ class Interface:
     def fetch_kernel_changelogs(self):
         self.tasks.fetch_kernel_changelogs()
 
+    def list_kernel_releases(self):
+        for release in self.tasks.list_kernel_releases():
+            print release
+
+    def list_kernel_commits(self, options):
+        for commit, title in self.tasks.list_kernel_commits(options.kcommits):
+            print commit, title
+
+    def find_kernel_cves(self, options):
+        for commit, cveid, message in self.tasks.find_kernel_cves(options.kver,
+                options.kcve):
+            print commit, cveid, message
+
     def init(self):
         if self.tasks.init():
             print "done"
@@ -954,7 +1042,7 @@ class Interface:
                     import subprocess
                     p = subprocess.Popen(["less"], stdin=subprocess.PIPE)
                     try:
-                        for dump in found:
+                        for cveid, dump in found:
                             p.stdin.write(dump)
                             p.stdin.write("\n")
                     finally:

@@ -35,6 +35,14 @@ def parse_options(args):
     parser.add_option("--kci", type="string", default=None,
             help="find kernel releases with a given commit message (strict"
                  " by default)")
+    parser.add_option("--kreleases", action="store_true", default=False,
+            help="list all kernel releases")
+    parser.add_option("--kcve", type="string", default="",
+            help="find for possible CVE fixes in kernel releases")
+    parser.add_option("--kver", type="string", default="",
+            help="the kernel version for the option above") # crap!
+    parser.add_option("--kcommits", type="string", default=None,
+            help="list commits from a given kernel release")
     parser.add_option("--distro", type="string", default=None,
             help="filter by distro name (when applicable)")
     parser.add_option("--media", type="string", default=None,
@@ -86,6 +94,12 @@ def run(options, args):
                 interface.correlate_cves_packages(options)
             if options.kci:
                 interface.find_kernel_commit(options)
+            if options.kreleases:
+                interface.list_kernel_releases()
+            if options.kcommits:
+                interface.list_kernel_commits(options)
+            if options.kcve or options.kver:
+                interface.find_kernel_cves(options)
             if options.easy_tickets:
                 interface.easy_tickets()
             if options.status:
