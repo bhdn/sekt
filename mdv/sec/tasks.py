@@ -145,6 +145,12 @@ class Config(ConfWrapper):
                 media.name = option
                 yield media, distro
 
+    def kernel_trees(self):
+        section = "kernel_trees"
+        trees = [self._config.get(section, option) for option in
+                 self._config.options("kernel_trees")]
+        return trees
+
     def load(self, path):
         """Load the configuration file in the given path"""
         self._config.read(path)
@@ -488,6 +494,25 @@ class PackagePool:
     def close(self):
         self._conn.close()
 
+class KernelTreePool:
+
+    def __init__(self, paths):
+        self.paths = paths
+
+    def pull(self):
+        for path in self.paths:
+            os.system("cd %s; git pull -q" % path)
+
+    def find_commit(self, commitid):
+        import commands
+        for path in self.paths:
+            cmd = "cd %s; git log -n 1 --pretty=oneline %s" % (path,
+                    commitid)
+            status, output = commands.getstatusoutput(cmd)
+            if status != 0:
+                continue
+            return output.strip().split(None, 1)[1]
+
 class KernelChangelogPool:
 
     def __init__(self, topdir, dbpath, config, paths):
@@ -640,7 +665,7 @@ class KernelChangelogPool:
         self.download()
         self.parse()
 
-    def find_commit(self, message, fuzzy=False):
+    def find_commit(self, message, version=None, fuzzy=False):
         self.open()
         stmt = """
             SELECT commitid, version, title
@@ -652,8 +677,16 @@ class KernelChangelogPool:
             stmt += " AND kernel_commit.title GLOB ?"
         else:
             stmt += " AND kernel_commit.title = ?"
+        parms = [message]
+        if version:
+            if fuzzy:
+                version = "*" + version + "*"
+                stmt += " AND changelog.version GLOB ?"
+            else:
+                stmt += " AND changelog.version = ?"
+            parms.append(version)
         cur = self._conn.cursor()
-        res = cur.execute(stmt, (message,))
+        res = cur.execute(stmt, parms)
         return res
 
     def list_versions(self):
@@ -776,6 +809,7 @@ class SecteamTasks:
         self.cves = None
         self.packages = None
         self.kernel_changelogs = None
+        self.kernel_trees = None
         self.tickets = None
 
     def open_stuff(self):
@@ -785,6 +819,7 @@ class SecteamTasks:
         self.kernel_changelogs = KernelChangelogPool(self.paths.kernel_changelogs_dir(),
                                                 self.paths.kernel_changelogs_database(),
                                                 self.config, self.paths)
+        self.kernel_trees = KernelTreePool(self.config.kernel_trees())
         #self.tickets = TicketSource(self.cvesource,
         #        self.config.ticket_cache, self.config.bugzilla_base_url,
         #        self.config)
@@ -826,6 +861,10 @@ class SecteamTasks:
         for name in pool.parse():
             yield name
         pool.close()
+
+    def pull_kernel_trees(self):
+        self.open_stuff()
+        self.kernel_trees.pull()
 
     def correlate_cves_packages(self, cvename, strict=False):
         self.open_stuff()
@@ -878,26 +917,45 @@ class SecteamTasks:
         # release
         import re
         expr = re.compile("git\.kernel\.org/(?:.*h=|linus/)(?P<ci>[0-9a-f]+)")
+        cveexpr = re.compile("(?P<cve>CVE-\d{4}-\d{4})")
         self.open_stuff()
         cis = self.kernel_changelogs.find_commits(version)
         allcommits = dict(cis)
         ids = allcommits.keys()
         cvecommits = set()
-        print "* looking for direct references to commits in CVE references"
+        yield "status", "looking for explicit CVE references in commit titles"
+        for ci, message in allcommits.iteritems():
+            found = cveexpr.search(message)
+            if found:
+                cveid = found.group("cve")
+                yield "found", (ci, cveid, message)
+        yield "status", "looking for direct references to commits in CVE references"
         for cveid, rawcve in self.cves.find_cve(cvepattern, dump=True):
             match = [id for id in ids if id in rawcve]
             if match:
                 for cimatch in match:
-                    yield (cimatch, cveid,
-                            self.kernel_changelogs.get_message(cimatch))
+                    yield "found", (cimatch, cveid, allcommits[cimatch])
             for found in expr.finditer(rawcve):
                 foundci = found.group("ci")
                 cvecommits.add((cveid, foundci))
-        print "* looking for CVE commits with same title in the version %s" % version
+        yield "status", "looking for CVE commits with same title in the version %s" % version
+        foundcves = set()
         for cveid, ci in cvecommits:
             for ci2, title in self.kernel_changelogs.find_like_commits(ci,
                     version):
-                yield ci2, cveid, title
+                yield "found", (ci2, cveid, title)
+                foundcves.add((cveid, ci))
+        cvecommits.difference_update(foundcves)
+        cvemessages = set()
+        for cveid, ci in cvecommits:
+            message = self.kernel_trees.find_commit(ci)
+            if message:
+                cvemessages.add((cveid, ci, message))
+        for cveid, ci, message in cvemessages:
+            finditer = self.kernel_changelogs.find_commit(message, version=version)
+            for ci2, _version, _message in finditer:
+                yield "found", (ci2, cveid, message)
+
 
     def init(self):
         path = self.paths.workdir()
@@ -972,6 +1030,9 @@ class Interface:
                 elif status in ("parsing", "skiping"):
                     print status, args[0], args[1]
 
+    def pull_kernel_trees(self):
+        self.tasks.pull_kernel_trees()
+
     def parse_kernel_changelogs(self):
         for name in self.tasks.parse_kernel_changelogs():
             print name
@@ -1016,9 +1077,16 @@ class Interface:
             print commit, title
 
     def find_kernel_cves(self, options):
-        for commit, cveid, message in self.tasks.find_kernel_cves(options.kver,
+        for type, extra in self.tasks.find_kernel_cves(options.kver,
                 options.kcve):
-            print commit, cveid, message
+            if type == "status":
+                print "*", extra
+            else:
+                ci, cveid, message = extra
+                print cveid, ci[:8], message
+
+    def get_kernel_commit(self, options):
+        print self.tasks.get_kernel_commit(options.kcommit)
 
     def init(self):
         if self.tasks.init():
