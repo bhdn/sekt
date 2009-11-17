@@ -834,11 +834,15 @@ class SecteamTasks:
         # handle proxies easily
         cmd = "curl --silent '%s' | zcat" % self.config.cves.url
         log.debug("running: %s", cmd)
-        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE)
         cves = CVEPool(self.paths.cve_database(), self.paths.cve_info())
         for chunk in split(p.stdout):
             new = cves.put_xml(chunk)
             yield new
+        if p.returncode != 0:
+            raise PullError, "CVE pull failed: %s: %s" % (cmd,
+                    p.stderr.read())
         cves.close()
 
     def pull_packages(self):
