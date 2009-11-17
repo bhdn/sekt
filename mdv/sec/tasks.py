@@ -37,8 +37,8 @@ logs_dir = kernel-changelogs
 download_command = wget --quiet -P $dest -nc '$url'
 url = ftp://ftp.kernel.org/pub/linux/kernel/v2.6/ChangeLog-*
 
-[cve]
-valid_status = OPEN NEW INVALID FIXED RELEASED WONTFIX
+[cves]
+url = http://cve.mitre.org/data/downloads/allitems.xml.gz
 
 [conf]
 path_environment = SEKT_CONF
@@ -824,13 +824,19 @@ class SecteamTasks:
         #        self.config.ticket_cache, self.config.bugzilla_base_url,
         #        self.config)
 
-    def pull_cves(self, stream):
+    def pull_cves(self):
         """Pull CVE XMLs from a text stream (usually the one from
         cve.mitre.org)
         """
         from mdv.sec.pullcves import split
+        import subprocess
+        # gzip can't handle urllib's file streams, and urllib does not
+        # handle proxies easily
+        cmd = "curl --silent '%s' | zcat" % self.config.cves.url
+        log.debug("running: %s", cmd)
+        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
         cves = CVEPool(self.paths.cve_database(), self.paths.cve_info())
-        for chunk in split(stream):
+        for chunk in split(p.stdout):
             new = cves.put_xml(chunk)
             yield new
         cves.close()
@@ -956,7 +962,6 @@ class SecteamTasks:
             for ci2, _version, _message in finditer:
                 yield "found", (ci2, cveid, message)
 
-
     def init(self):
         path = self.paths.workdir()
         if os.path.exists(path):
@@ -1005,7 +1010,7 @@ class Interface:
         show = os.isatty(1)
         newcount = 0
         i = 0
-        for i, new in enumerate(self.tasks.pull_cves(sys.stdin)):
+        for i, new in enumerate(self.tasks.pull_cves()):
             if new:
                 newcount += 1
             if show and i % 1000 == 0:
