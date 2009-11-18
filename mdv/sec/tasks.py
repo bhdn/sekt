@@ -820,6 +820,7 @@ class SecteamTasks:
                                                 self.paths.kernel_changelogs_database(),
                                                 self.config, self.paths)
         self.kernel_trees = KernelTreePool(self.config.kernel_trees())
+        self.open_stuff = lambda: None
         #self.tickets = TicketSource(self.cvesource,
         #        self.config.ticket_cache, self.config.bugzilla_base_url,
         #        self.config)
@@ -875,6 +876,19 @@ class SecteamTasks:
     def pull_kernel_trees(self):
         self.open_stuff()
         self.kernel_trees.pull()
+
+    def pull(self):
+       yield "pulling cves"
+       all(self.pull_cves())
+       yield "pulling packages"
+       all(self.pull_packages())
+       yield "fetching kernel changelogs"
+       self.fetch_kernel_changelogs()
+       yield "parsing kernel changelogs"
+       all(self.parse_kernel_changelogs())
+       yield "pulling kernel trees"
+       self.pull_kernel_trees()
+       yield "wow! it is done"
 
     def correlate_cves_packages(self, cvename, strict=False):
         self.open_stuff()
@@ -1049,6 +1063,10 @@ class Interface:
     def parse_kernel_changelogs(self):
         for name in self.tasks.parse_kernel_changelogs():
             print name
+
+    def pull(self):
+        for status in self.tasks.pull():
+            print status
 
     def correlate_cves_packages(self, options):
         cvegen = self.tasks.correlate_cves_packages(options.cve_keywords,
