@@ -58,10 +58,6 @@ def parse_options(args):
             "tree pool)")
     parser.add_option("-y", "--fuzzy", action="store_true", default=False,
             help="search using approximate search (as in urpmq -y)")
-    parser.add_option("--easy-tickets", action="store_true",
-            default=False, help="show easy to fix tickets")
-    parser.add_option("--status", action="store_true", default=False,
-            help="show the status of the tickets for each distro")
     parser.add_option("--showrc", action="store_true", default=False,
             help="dump sekt configuration")
     parser.add_option("-v", "--verbose", action="store_true", default=False)
@@ -113,10 +109,6 @@ def run(options, args):
                 interface.get_kernel_commit(options)
             if options.kcve or options.kver:
                 interface.find_kernel_cves(options)
-            if options.easy_tickets:
-                interface.easy_tickets()
-            if options.status:
-                interface.status()
             if options.showrc:
                 interface.dump_conf()
         finally:

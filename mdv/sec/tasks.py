@@ -821,9 +821,6 @@ class SecteamTasks:
                                                 self.config, self.paths)
         self.kernel_trees = KernelTreePool(self.config.kernel_trees())
         self.open_stuff = lambda: None
-        #self.tickets = TicketSource(self.cvesource,
-        #        self.config.ticket_cache, self.config.bugzilla_base_url,
-        #        self.config)
 
     def pull_cves(self):
         """Pull CVE XMLs from a text stream (usually the one from
@@ -1011,22 +1008,6 @@ class Interface:
     def __init__(self, config, tasks):
         self.config = config
         self.tasks = tasks
-
-    def easy_tickets(self):
-        for ticket, reasons in self.ktasks.easy_tickets():
-            print "%s %s" % (ticket.bugid, ticket.cve.cveid)
-            for reason in reasons:
-                if issubclass(reason[0], self.ktasks.Reasons.HasCommits):
-                    print "   ", reason[1]
-
-    def status(self):
-        for ticket, status in self.ktasks.status():
-            if status is None:
-                line = "NO STATUS"
-            else:
-                line = " | ".join("%s: %s" % (k, v) for k, v in
-                        status.iteritems())
-            print "%s %s: %s" % (ticket.bugid, ticket.cve.cveid, line)
 
     def pull_cves(self):
         show = os.isatty(1)
