@@ -37,6 +37,8 @@ logs_dir = kernel-changelogs
 download_command = wget --quiet -P $dest -nc '$url'
 url = ftp://ftp.kernel.org/pub/linux/kernel/v2.6/ChangeLog-*
 
+[kernel_trees]
+
 [cves]
 url = http://cve.mitre.org/data/downloads/allitems.xml.gz
 
