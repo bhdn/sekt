@@ -922,6 +922,10 @@ class SecteamTasks:
         self.open_stuff()
         return self.kernel_changelogs.find_commits(version)
 
+    def get_kernel_commit(self, commit):
+        self.open_stuff()
+        return self.kernel_changelogs.get_message(commit)
+
     def find_kernel_cves(self, version, cvepattern=None):
         # tries to find all CVEs that have references to commits from this
         # release
@@ -1095,7 +1099,8 @@ class Interface:
                 print cveid, ci[:8], message
 
     def get_kernel_commit(self, options):
-        print self.tasks.get_kernel_commit(options.kcommit)
+        for message in self.tasks.get_kernel_commit(options.kcommit):
+            print options.kcommit[:8], message
 
     def init(self):
         if self.tasks.init():
