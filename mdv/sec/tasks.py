@@ -1059,7 +1059,7 @@ class Interface:
                 print status, args[0], " ".join(args[1])
 
     def find_packages(self, options):
-        format = "%s %s %s %s"
+        format = "%s\t%s\t%s\t%s"
         if os.isatty(1):
             import commands
             _, rawcols = commands.getoutput('stty size').split()
