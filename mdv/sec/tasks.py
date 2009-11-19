@@ -946,6 +946,7 @@ class SecteamTasks:
         expr = re.compile("git\.kernel\.org/(?:.*h=|linus/)(?P<ci>[0-9a-f]+)")
         cveexpr = re.compile("(?P<cve>CVE-\d{4}-\d{4})")
         self.open_stuff()
+        # FIXME just search by CVEs using the database
         cis = self.kernel_changelogs.find_commits(version)
         allcommits = dict(cis)
         ids = allcommits.keys()
