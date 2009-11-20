@@ -912,6 +912,12 @@ class SecteamTasks:
             else:
                 yield "N", cve.cveid
 
+    def cve_for_advisory(self, cveid):
+        self.open_stuff()
+        for cve in self.cves.find_cve(cveid, strict=True):
+            desc = "%s (%s)" % (cve.description, cve.cveid)
+            yield desc
+
     def find_packages(self, name, media=None, distro=None, strict=False):
         self.open_stuff()
         gen = self.packages.find_packages(name_glob=name, media=media,
@@ -1058,6 +1064,12 @@ class Interface:
         for status, args in cvegen:
             if status == "F":
                 print status, args[0], " ".join(args[1])
+
+    def cve_for_advisory(self, options):
+        cve = options.cve_for_advisory
+        for descr in self.tasks.cve_for_advisory(cve):
+            print descr
+            print
 
     def find_packages(self, options):
         format = "%s\t%s\t%s\t%s"

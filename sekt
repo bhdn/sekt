@@ -36,6 +36,9 @@ def parse_options(args):
             help="find a package (as in urpmq -y)")
     parser.add_option("--cve-keywords", type="string", default=None,
             help="show matching keywords for CVEs")
+    parser.add_option("--cve-for-advisory", type="string", default=None,
+            help="dumps the CVE description (to be used in MDV"
+            " advisories)")
     parser.add_option("--kci", type="string", default=None,
             help="find kernel releases with a given commit message (strict"
                  " by default)")
@@ -97,6 +100,8 @@ def run(options, args):
                 interface.dump_cve(options)
             if options.pkg:
                 interface.find_packages(options)
+            if options.cve_for_advisory:
+                interface.cve_for_advisory(options)
             if options.cve_keywords:
                 interface.correlate_cves_packages(options)
             if options.kci:
