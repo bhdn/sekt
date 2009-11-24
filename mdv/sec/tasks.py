@@ -897,7 +897,7 @@ class SecteamTasks:
                                "patch", "null", "at", "up", "connect",
                                "open"])
         extra = frozenset(["kernel"])
-        find = names.union(extra)
+        keywords = names.union(extra)
         def split_words(descr):
             found = []
             for rawword in cve.description.split():
@@ -905,8 +905,8 @@ class SecteamTasks:
                 found.append(simple.lower())
             return frozenset(found)
         for cve in self.cves.find_cve(cvename, strict=strict):
-            keywords = split_words(cve.description)
-            found = find.intersection(keywords) - exceptions
+            words = split_words(cve.description)
+            found = keywords.intersection(words) - exceptions
             if found:
                 yield "F", (cve.cveid, found)
             else:
