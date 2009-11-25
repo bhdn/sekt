@@ -10,14 +10,9 @@ import ConfigParser
 
 # external deps:
 
-#import yaml
 #import bugz
 
 # yes, I hate high import times:
-
-def yaml():
-    import yaml
-    return yaml
 
 def bugz():
     import bugz
@@ -26,7 +21,7 @@ def bugz():
 CONFIG_DEFAULTS = """\
 [sekt]
 workdir = ~/sekt/
-cve_database = cves
+cve_database = cves.sqlite
 packages_database = packages.sqlite
 cve_info = cves-metadata.shelve
 bugzilla_base_url = https://qa.mandriva.com
@@ -159,20 +154,38 @@ class Config(ConfWrapper):
 
 class CVEPool:
 
-    def __init__(self, dbpath, infopath):
+    def __init__(self, dbpath):
         self.dbpath = dbpath
-        self.infopath = infopath
-        log.info("opening cve archive at %s", self.dbpath)
-        if not os.path.exists(dbpath):
-            os.mkdir(dbpath)
-        self._info = None # metadata is loaded lazily
-        self._cvere = None
+        self._conn = None
 
     def open(self):
-        import shelve
-        log.info("opening cve metadata at %s", self.infopath)
-        self._info = shelve.open(self.infopath)
-        self.open = lambda: None # hihihihi...
+        import sqlite3
+        log.info("opening cve archive at %s", self.dbpath)
+        if not os.path.exists(self.dbpath):
+            self._create_db()
+        self._conn = sqlite3.connect(self.dbpath)
+        self.open = lambda: None
+
+    def _create_db(self):
+        log.info("created database at %s", self.dbpath)
+        import sqlite3
+        stmt = """
+            CREATE TABLE cve (
+                id INTEGER PRIMARY KEY,
+                cve TEXT,
+                description TEXT,
+                status TEXT,
+                phase TEXT,
+                rawhash TEXT,
+                refs TEXT);
+
+            CREATE INDEX cve_cve ON cve (cve, rawhash);
+        """
+        conn = sqlite3.connect(self.dbpath)
+        cur = conn.cursor()
+        cur.executescript(stmt)
+        conn.commit()
+        conn.close()
 
     @classmethod
     def _get_cve(klass, rawxml):
@@ -196,63 +209,88 @@ class CVEPool:
         # don't parse comments, as apparently we wont' need them
         return cve
 
+    def _cve_from_db(self, cvetuples):
+        names = "source", "url", "descr"
+        for cvetuple in cvetuples:
+            cve = CVE(None)
+            (cve_id, cve.cveid, cve.description, cve.status, cve.phase,
+                    rawrefs) = cvetuple
+            cve.references = []
+            for line in rawrefs.split("\n"):
+                if not line:
+                    continue
+                cols = line.split("\t")
+                ref = dict(zip(names, cols))
+                cve.references.append(ref)
+            yield cve
+
     def get(self, cveid):
-        return self.from_yaml(self.get_dump(cveid))
+        self.open()
+        stmtcve = """
+            SELECT DISTINCT id, cve, description, status, phase, refs
+            FROM cve
+            WHERE cve = ?
+        """
+        self._conn.text_factory = str
+        cur = self._conn.cursor()
+        found = cur.execute(stmtcve, (cveid,))
+        try:
+            cve, = self._cve_from_db(found).next()
+        except StopIteration:
+            raise InvalidCVE
+        return cve
 
     def get_dump(self, cveid):
-        path = self._path(cveid)
-        try:
-            rawyaml = open(path).read()
-        except IOError:
-            return None
-        return rawyaml
+        self.open()
+        cve = self.get(cveid)
+        return repr(cve)
 
     def find_cve(self, cveid, strict=False, dump=False):
-        import glob
+        self.open()
+        templ = """
+            SELECT id, cve, description, status, phase, refs
+            FROM cve
+            WHERE
+        """
         cveid = self._fix_prepend(cveid)
-        if strict:
-            fmt = "%s/*/%s"
+        stmteq = templ + " cve = ?"
+        self._conn.text_factory = str
+        cur = self._conn.cursor()
+        found = cur.execute(stmteq, (cveid,))
+        try:
+            cve = self._cve_from_db(found).next()
+        except StopIteration:
+            idexpr = cveid + "%"
+            stmtlike = templ + "cve LIKE ?"
+            found = cur.execute(stmtlike, (idexpr,))
+            for cve in self._cve_from_db(found):
+                if dump:
+                    yield cve.cveid, repr(cve)
+                else:
+                    yield cve
         else:
-            fmt = "%s/*/%s*"
-        expr = fmt % (self.dbpath, cveid)
-        for path in glob.iglob(expr):
-            rawyaml = open(path).read()
             if dump:
-                cveid = os.path.basename(path)
-                yield cveid, rawyaml
+                yield cve.cveid, repr(cve)
             else:
-                yield self.from_yaml(rawyaml)
-
-    @classmethod
-    def from_yaml(klass, rawyaml):
-        cve = CVE(None)
-        cve.__dict__.update(yaml().load(rawyaml))
-        return cve
+                yield cve
 
     def _fix_prepend(self, cveid):
         if not (cveid.startswith("CVE-") or cveid.startswith("CAN-")):
             cveid = "CVE-" + cveid
         return cveid
 
-    def _path(self, cveid):
-        cveid = self._fix_prepend(cveid)
-        try:
-            _, y, _ = cveid.split("-", 2)
-        except ValueError:
-            raise InvalidCVE, "invalid CVE ID: %s" % cveid
-        path = os.path.join(self.dbpath, y, cveid)
-        return path
-
     def _get_info(self, cveid):
         self.open()
-        rawinfo = self._info.get(cveid)
-        if rawinfo is not None:
-            try:
-                hash, changed = rawinfo
-            except ValueError:
-                hash = changed = None
-            info = {"hash": hash, "changed": changed}
-            return info
+        stmt = "SELECT DISTINCT rawhash FROM cve WHERE cve = ?"
+        pars = (cveid,)
+        self._conn.text_factory = str
+        cur = self._conn.cursor()
+        try:
+            rawhash, = cur.execute(stmt, pars).next()
+        except StopIteration:
+            return None
+        info = {"hash": rawhash}
+        return info
 
     def _set_info(self, cveid, hash=None, changed=None):
         self.open()
@@ -271,35 +309,79 @@ class CVEPool:
             return found.group("name")
         raise PullError, "invalid CVE XML chunk: %s" % xml
 
+    def _remove(self, cveid):
+        stmtref = """
+            DELETE FROM ref WHERE cve_id = (
+                SELECT DISTINCT id FROM cve WHERE cve = ?);
+        """
+        pars = (cveid,)
+        self._conn.text_factory = str
+        cur = self._conn.cursor()
+        cur.execute(stmtref, pars)
+        stmtcve = "DELETE FROM cve WHERE cve = ?"
+        cur.execute(stmtcve, pars)
+
+    def _insert(self, cve, references, rawhash):
+        stmt = """
+            INSERT INTO cve (cve, description, status, phase, refs, rawhash)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """
+        self._conn.text_factory = str
+        cur = self._conn.cursor()
+        references = "\n".join("\t".join((r["source"] or "",
+                                          r["url"] or "", r["descr"] or ""))
+                                for r in references)
+        pars = (cve.cveid, cve.description, cve.status, cve.phase,
+                references, rawhash)
+        cur.execute(stmt, pars)
+        #stmtid = "SELECT DISTINCT id FROM cve WHERE cve = ?"
+        #pars = (cve.cveid,)
+        #id, = cur.execute(stmtid, pars).next()
+        #seqpars = ((id, )
+        #stmtrefs = """
+        #    INSERT INTO ref (cve_id, descr, source, url)
+        #    VALUES (?, ?, ?, ?)
+        #"""
+        #cur.executemany(stmtrefs, seqpars)
+
     def put_xml(self, xml):
+        self.open()
         import hashlib
         md5 = hashlib.md5()
         md5.update(xml)
         newhash = md5.hexdigest()
         cveid = self._get_id(xml)
         info = self._get_info(cveid)
-        if info and info["hash"] == newhash:
-            log.debug("no need to update %s (%s)", cveid, newhash)
+        insert = False
+        if info:
+            if info["hash"] != newhash:
+                self._remove(cveid)
+                insert = True
+            else:
+                log.debug("no need to update %s (%s)", cveid, newhash)
         else:
+            insert = True
+        if insert:
             cve = self._get_cve(xml)
-            rawyaml = repr(cve)
-            path = self._path(cve.cveid)
-            dir = os.path.dirname(path)
-            if not os.path.exists(dir):
-                os.mkdir(dir)
-            import tempfile
-            f = tempfile.NamedTemporaryFile(dir=dir, delete=False)
-            f.write(rawyaml)
-            f.close()
-            os.rename(f.name, path)
-            self._set_info(cveid, hash=newhash, changed=time.time())
+            log.debug("inserting %s %s", cve.cveid, newhash)
+            self._insert(cve, cve.references, newhash)
             return True
         return False # not new
 
+    def pull(self, chunkgen):
+        self.open()
+        for i, chunk in enumerate(chunkgen):
+            if i % 1000 == 0:
+                log.debug("commiting batch of CVEs")
+                self._conn.commit()
+            new = self.put_xml(chunk)
+            yield new
+        self._conn.commit()
+
     def close(self):
-        log.debug("closing cve archive at %s" % self.dbpath)
-        if self._info:
-            self._info.close()
+        log.debug("closing cve database at %s" % self.dbpath)
+        if self._conn:
+            self._conn.close()
 
 class CVE:
 
@@ -316,7 +398,20 @@ class CVE:
         self.cveid = cveid
 
     def __repr__(self):
-        return yaml().dump(self.__dict__, default_flow_style=False)
+        import textwrap
+        #import yaml
+        #return yaml.dump(self.__dict__, default_flow_style=False)
+        description = "\n    ".join(textwrap.wrap(self.description, 75))
+        if self.references:
+            references = "\n".join("- source: %s\n  descr: %s\n  url: %s" % (
+                                   ref["source"], ref["descr"], ref["url"]) 
+                                   for ref in self.references)
+        else:
+            references = ""
+        dump = "id: %s\ndescription: %s\nstatus: %s\nphase: %s\n"\
+               "references: %s\n" % (self.cveid, description,
+                       self.status, self.phase, references)
+        return dump
 
 class Media:
 
@@ -815,8 +910,7 @@ class SecteamTasks:
         self.tickets = None
 
     def open_stuff(self):
-        self.cves = CVEPool(self.paths.cve_database(),
-                self.paths.cve_info())
+        self.cves = CVEPool(self.paths.cve_database())
         self.packages = PackagePool(self.paths.packages_database())
         self.kernel_changelogs = KernelChangelogPool(self.paths.kernel_changelogs_dir(),
                                                 self.paths.kernel_changelogs_database(),
@@ -836,10 +930,11 @@ class SecteamTasks:
         log.debug("running: %s", cmd)
         p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE)
-        cves = CVEPool(self.paths.cve_database(), self.paths.cve_info())
-        for chunk in split(p.stdout):
-            new = cves.put_xml(chunk)
+        cves = CVEPool(self.paths.cve_database())
+        chunkgen = (chunk for chunk in split(p.stdout))
+        for new in cves.pull(chunkgen):
             yield new
+        p.wait()
         if p.returncode != 0:
             raise PullError, "CVE pull failed: %s: %s" % (cmd,
                     p.stderr.read())
@@ -964,14 +1059,16 @@ class SecteamTasks:
                 cveid = found.group("cve")
                 yield "found", (ci, cveid, message)
         yield "status", "looking for direct references to commits in CVE references"
-        for cveid, rawcve in self.cves.find_cve(cvepattern, dump=True):
-            match = [id for id in ids if id in rawcve]
+        for cve in self.cves.find_cve(cvepattern):
+            match = [id for id in ids if
+                    any((id in ref["url"]) for ref in cve.references)]
             if match:
                 for cimatch in match:
                     yield "found", (cimatch, cveid, allcommits[cimatch])
-            for found in expr.finditer(rawcve):
-                foundci = found.group("ci")
-                cvecommits.add((cveid, foundci))
+            for ref in cve.references:
+                for found in expr.finditer(ref["url"]):
+                    foundci = found.group("ci")
+                    cvecommits.add((cveid, foundci))
         yield "status", "looking for CVE commits with same title in the version %s" % version
         foundcves = set()
         for cveid, ci in cvecommits:
@@ -1134,7 +1231,7 @@ class Interface:
             try:
                 found = self.tasks.find_cve(options.cve,
                         strict=options.strict, dump=True)
-                if os.isatty(1):
+                if os.isatty(1) and not os.getenv("SEKT_NOPIPE"):
                     import subprocess
                     p = subprocess.Popen(["less"], stdin=subprocess.PIPE)
                     try:
@@ -1145,7 +1242,7 @@ class Interface:
                         p.stdin.close()
                         p.wait()
                 else:
-                    sys.stdout.writelines(found)
+                    sys.stdout.writelines(rawcve for cveid, rawcve in found)
             except IOError, e:
                 if e.errno != 32: # broken pipe
                     raise
