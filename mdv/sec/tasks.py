@@ -245,7 +245,7 @@ class CVEPool:
         cve = self.get(cveid)
         return repr(cve)
 
-    def find_cve(self, cveid, strict=False, dump=False):
+    def find_cve(self, cveid, strict=False, dump=False, filter=None):
         self.open()
         templ = """
             SELECT id, cve, description, status, phase, refs
@@ -253,26 +253,39 @@ class CVEPool:
             WHERE
         """
         cveid = self._fix_prepend(cveid)
-        stmteq = templ + " cve = ?"
+        if not filter:
+            stmteq = templ + " cve = ?"
+            pars = (cveid,)
+        else:
+            stmteq = templ + " " + filter
+            pars = ()
         self._conn.text_factory = str
         cur = self._conn.cursor()
-        found = cur.execute(stmteq, (cveid,))
+        found = cur.execute(stmteq, pars)
+        cvegen = self._cve_from_db(found)
         try:
-            cve = self._cve_from_db(found).next()
+            cve = cvegen.next()
+            yield cve
         except StopIteration:
-            idexpr = cveid + "%"
-            stmtlike = templ + "cve LIKE ?"
-            found = cur.execute(stmtlike, (idexpr,))
+            if not filter:
+                idexpr = cveid + "%"
+                stmtlike = templ + "cve LIKE ?"
+                pars = (idexpr,)
+            else:
+                stmtlike = templ + " " + filter
+                pars = ()
+            found = cur.execute(stmtlike, pars)
             for cve in self._cve_from_db(found):
                 if dump:
                     yield cve.cveid, repr(cve)
                 else:
                     yield cve
         else:
-            if dump:
-                yield cve.cveid, repr(cve)
-            else:
-                yield cve
+            for cve in cvegen:
+                if dump:
+                    yield cve.cveid, repr(cve)
+                else:
+                    yield cve
 
     def _fix_prepend(self, cveid):
         if not (cveid.startswith("CVE-") or cveid.startswith("CAN-")):
@@ -1040,7 +1053,7 @@ class SecteamTasks:
         self.open_stuff()
         return self.kernel_changelogs.get_message(commit)
 
-    def find_kernel_cves(self, version, cvepattern=None):
+    def find_kernel_cves(self, version):
         # tries to find all CVEs that have references to commits from this
         # release
         import re
@@ -1059,7 +1072,8 @@ class SecteamTasks:
                 cveid = found.group("cve")
                 yield "found", (ci, cveid, message)
         yield "status", "looking for direct references to commits in CVE references"
-        for cve in self.cves.find_cve(cvepattern):
+        gitfilter = "refs LIKE '%git.kernel.org%'"
+        for cve in self.cves.find_cve("", filter=gitfilter):
             match = [id for id in ids if
                     any((id in ref["url"]) for ref in cve.references)]
             if match:
@@ -1201,8 +1215,7 @@ class Interface:
             print commit, title
 
     def find_kernel_cves(self, options):
-        for type, extra in self.tasks.find_kernel_cves(options.kver,
-                options.kcve):
+        for type, extra in self.tasks.find_kernel_cves(options.kcve):
             if type == "status":
                 print "*", extra
             else:
