@@ -58,6 +58,8 @@ def parse_options(args):
     parser.add_option("--kcommit", type="string", nargs=1,
             help="get the first line of a given kernel commit (from "
             "tree pool)")
+    parser.add_option("-f", dest="file", metavar="FILE", type="string",
+            nargs=1, help="read from a given file")
     parser.add_option("-y", "--fuzzy", action="store_true", default=False,
             help="search using approximate search (as in urpmq -y)")
     parser.add_option("--showrc", action="store_true", default=False,
@@ -84,7 +86,7 @@ def run(options, args):
             if options.init:
                 interface.init()
             if options.pull_cves:
-                interface.pull_cves()
+                interface.pull_cves(options)
             if options.pull_medias:
                 interface.pull_packages()
             if options.fetch_kernel_changelogs:

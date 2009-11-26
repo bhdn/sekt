@@ -945,7 +945,7 @@ class SecteamTasks:
         self.kernel_trees = KernelTreePool(self.config.kernel_trees())
         self.open_stuff = lambda: None
 
-    def pull_cves(self):
+    def pull_cves(self, file=None):
         """Pull CVE XMLs from a text stream (usually the one from
         cve.mitre.org)
         """
@@ -953,18 +953,25 @@ class SecteamTasks:
         import subprocess
         # gzip can't handle urllib's file streams, and urllib does not
         # handle proxies easily
-        cmd = "curl --silent '%s' | zcat" % self.config.cves.url
-        log.debug("running: %s", cmd)
-        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE)
         cves = CVEPool(self.paths.cve_database())
-        chunkgen = (chunk for chunk in split(p.stdout))
+        if file:
+            source = open(file)
+        else:
+            cmd = "curl --silent '%s' | zcat" % self.config.cves.url
+            log.debug("running: %s", cmd)
+            p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE)
+            source = p.stdout
+        chunkgen = (chunk for chunk in split(source))
         for new in cves.pull(chunkgen):
             yield new
-        p.wait()
-        if p.returncode != 0:
-            raise PullError, "CVE pull failed: %s: %s" % (cmd,
-                    p.stderr.read())
+        if file:
+            source.close()
+        else:
+            p.wait()
+            if p.returncode != 0:
+                raise PullError, "CVE pull failed: %s: %s" % (cmd,
+                        p.stderr.read())
         cves.close()
 
     def pull_packages(self):
@@ -1143,11 +1150,11 @@ class Interface:
         self.config = config
         self.tasks = tasks
 
-    def pull_cves(self):
+    def pull_cves(self, options):
         show = os.isatty(1)
         newcount = 0
         i = 0
-        for i, new in enumerate(self.tasks.pull_cves()):
+        for i, new in enumerate(self.tasks.pull_cves(options.file)):
             if new:
                 newcount += 1
             if show and i % 1000 == 0:
