@@ -430,9 +430,6 @@ class CVE:
                 if fields:
                     refs.append("ref: " + " ".join(fields))
             references = "\n".join(refs)
-            #jreferences = "\n".join("- source: %s\n  descr: %s\n  url: %s" % (
-            #j                       ref["source"], ref["descr"], ref["url"]) 
-            #j                       for ref in self.references)
         else:
             references = ""
         dump = "id: %s\ndescription: %s\nstatus: %s\nphase: %s\n"\
