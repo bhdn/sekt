@@ -176,6 +176,7 @@ class CVEPool:
                 description TEXT,
                 status TEXT,
                 phase TEXT,
+                date INTEGER,
                 rawhash TEXT,
                 refs TEXT);
 
@@ -200,6 +201,7 @@ class CVEPool:
         node = root.find(".//phase")
         if node is not None:
             cve.phase = node.text
+            cve.date = int(node.attrib.get("date"))
         cve.description = root.find(".//desc").text
         cve.references = [{
                 "source": ref.attrib.get("source"),
@@ -214,7 +216,7 @@ class CVEPool:
         for cvetuple in cvetuples:
             cve = CVE(None)
             (cve_id, cve.cveid, cve.description, cve.status, cve.phase,
-                    rawrefs) = cvetuple
+                    cve.date, rawrefs) = cvetuple
             cve.references = []
             for line in rawrefs.split("\n"):
                 if not line:
@@ -227,7 +229,7 @@ class CVEPool:
     def get(self, cveid):
         self.open()
         stmtcve = """
-            SELECT DISTINCT id, cve, description, status, phase, refs
+            SELECT DISTINCT id, cve, description, status, phase, date, refs
             FROM cve
             WHERE cve = ?
         """
@@ -249,7 +251,7 @@ class CVEPool:
     def find_cve(self, cveid, strict=False, dump=False, filter=None):
         self.open()
         templ = """
-            SELECT id, cve, description, status, phase, refs
+            SELECT id, cve, description, status, phase, date, refs
             FROM cve
             WHERE
         """
@@ -340,8 +342,8 @@ class CVEPool:
 
     def _insert(self, cve, references, rawhash):
         stmt = """
-            INSERT INTO cve (cve, description, status, phase, refs, rawhash)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO cve (cve, description, status, phase, date, refs, rawhash)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """
         self._conn.text_factory = str
         cur = self._conn.cursor()
@@ -349,7 +351,7 @@ class CVEPool:
                                           r["url"] or "", r["descr"] or ""))
                                 for r in references)
         pars = (cve.cveid, cve.description, cve.status, cve.phase,
-                references, rawhash)
+                cve.date, references, rawhash)
         cur.execute(stmt, pars)
         #stmtid = "SELECT DISTINCT id FROM cve WHERE cve = ?"
         #pars = (cve.cveid,)
@@ -410,6 +412,7 @@ class CVE:
     description = None
     status = None
     phase = None
+    date = None
 
     def __init__(self, cveid):
         self.cveid = cveid
