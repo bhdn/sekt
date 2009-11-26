@@ -1241,31 +1241,20 @@ class Interface:
 
     def dump_cve(self, options):
         try:
-            dump = self.tasks.dump_cve(options.cve)
-        except InvalidCVE:
-            dump = None
-        if dump is None:
-            try:
-                found = self.tasks.find_cve(options.cve,
-                        strict=options.strict, dump=True)
-                if os.isatty(1) and not os.getenv("SEKT_NOPIPE"):
-                    import subprocess
-                    p = subprocess.Popen(["less"], stdin=subprocess.PIPE)
-                    try:
-                        for cveid, dump in found:
-                            p.stdin.write(dump)
-                            p.stdin.write("\n")
-                    finally:
-                        p.stdin.close()
-                        p.wait()
-                else:
-                    sys.stdout.writelines(rawcve for cveid, rawcve in found)
-            except IOError, e:
-                if e.errno != 32: # broken pipe
-                    raise
-        else:
-            if dump:
-                print dump
+            found = self.tasks.find_cve(options.cve,
+                    strict=options.strict, dump=True)
+            if os.isatty(1) and not os.getenv("SEKT_NOPIPE"):
+                import subprocess
+                p = subprocess.Popen(["less"], stdin=subprocess.PIPE)
+                try:
+                    for cveid, dump in found:
+                        p.stdin.write(dump)
+                        p.stdin.write("\n")
+                finally:
+                    p.stdin.close()
+                    p.wait()
             else:
-                sys.stderr.write("no such identifier: %s\n" % options.cve)
-                sys.exit(1)
+                sys.stdout.writelines(rawcve for cveid, rawcve in found)
+        except IOError, e:
+            if e.errno != 32: # broken pipe
+                raise
