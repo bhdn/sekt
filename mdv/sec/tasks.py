@@ -423,7 +423,7 @@ class CVE:
                 fields = []
                 if ref["source"] and ref["source"] != ref["url"]:
                     fields.append(ref["source"])
-                if ref["descr"] and ref["descr"] != ref["source"]:
+                if ref["descr"] and ref["descr"] != ref["url"]:
                     fields.append(ref["descr"])
                 if ref["url"]:
                     fields.append(ref["url"])
