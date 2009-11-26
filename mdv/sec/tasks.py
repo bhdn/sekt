@@ -231,11 +231,12 @@ class CVEPool:
             FROM cve
             WHERE cve = ?
         """
+        cveid = self._fix_prepend(cveid)
         self._conn.text_factory = str
         cur = self._conn.cursor()
         found = cur.execute(stmtcve, (cveid,))
         try:
-            cve, = self._cve_from_db(found).next()
+            cve = self._cve_from_db(found).next()
         except StopIteration:
             raise InvalidCVE
         return cve
@@ -265,7 +266,10 @@ class CVEPool:
         cvegen = self._cve_from_db(found)
         try:
             cve = cvegen.next()
-            yield cve
+            if dump:
+                yield cve.cveid, repr(cve)
+            else:
+                yield cve
         except StopIteration:
             if not filter:
                 idexpr = cveid + "%"
