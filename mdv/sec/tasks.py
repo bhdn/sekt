@@ -416,17 +416,27 @@ class CVE:
 
     def __repr__(self):
         import textwrap
-        #import yaml
-        #return yaml.dump(self.__dict__, default_flow_style=False)
         description = "\n    ".join(textwrap.wrap(self.description, 75))
         if self.references:
-            references = "\n".join("- source: %s\n  descr: %s\n  url: %s" % (
-                                   ref["source"], ref["descr"], ref["url"]) 
-                                   for ref in self.references)
+            refs = []
+            for ref in self.references:
+                fields = []
+                if ref["source"] and ref["source"] != ref["url"]:
+                    fields.append(ref["source"])
+                if ref["descr"] and ref["descr"] != ref["source"]:
+                    fields.append(ref["descr"])
+                if ref["url"]:
+                    fields.append(ref["url"])
+                if fields:
+                    refs.append("ref: " + " ".join(fields))
+            references = "\n".join(refs)
+            #jreferences = "\n".join("- source: %s\n  descr: %s\n  url: %s" % (
+            #j                       ref["source"], ref["descr"], ref["url"]) 
+            #j                       for ref in self.references)
         else:
             references = ""
         dump = "id: %s\ndescription: %s\nstatus: %s\nphase: %s\n"\
-               "references: %s\n" % (self.cveid, description,
+               "%s\n" % (self.cveid, description,
                        self.status, self.phase, references)
         return dump
 
