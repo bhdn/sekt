@@ -329,16 +329,9 @@ class CVEPool:
         raise PullError, "invalid CVE XML chunk: %s" % xml
 
     def _remove(self, cveid):
-        stmtref = """
-            DELETE FROM ref WHERE cve_id = (
-                SELECT DISTINCT id FROM cve WHERE cve = ?);
-        """
-        pars = (cveid,)
-        self._conn.text_factory = str
         cur = self._conn.cursor()
-        cur.execute(stmtref, pars)
         stmtcve = "DELETE FROM cve WHERE cve = ?"
-        cur.execute(stmtcve, pars)
+        cur.execute(stmtcve, (cveid,))
 
     def _insert(self, cve, references, rawhash):
         stmt = """
@@ -353,15 +346,6 @@ class CVEPool:
         pars = (cve.cveid, cve.description, cve.status, cve.phase,
                 cve.date, references, rawhash)
         cur.execute(stmt, pars)
-        #stmtid = "SELECT DISTINCT id FROM cve WHERE cve = ?"
-        #pars = (cve.cveid,)
-        #id, = cur.execute(stmtid, pars).next()
-        #seqpars = ((id, )
-        #stmtrefs = """
-        #    INSERT INTO ref (cve_id, descr, source, url)
-        #    VALUES (?, ?, ?, ?)
-        #"""
-        #cur.executemany(stmtrefs, seqpars)
 
     def put_xml(self, xml):
         self.open()
