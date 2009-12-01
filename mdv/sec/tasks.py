@@ -1083,11 +1083,11 @@ class SecteamTasks:
                     any((id in ref["url"]) for ref in cve.references)]
             if match:
                 for cimatch in match:
-                    yield "found", (cimatch, cveid, allcommits[cimatch])
+                    yield "found", (cimatch, cve.cveid, allcommits[cimatch])
             for ref in cve.references:
                 for found in expr.finditer(ref["url"]):
                     foundci = found.group("ci")
-                    cvecommits.add((cveid, foundci))
+                    cvecommits.add((cve.cveid, foundci))
         yield "status", "looking for CVE commits with same title in the version %s" % version
         foundcves = set()
         for cveid, ci in cvecommits:
