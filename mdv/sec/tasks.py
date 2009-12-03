@@ -813,7 +813,9 @@ class KernelChangelogPool:
             """
         cur = self._conn.cursor()
         pars = (version,)
-        return cur.execute(stmt, pars)
+        for commit, title in cur.execute(stmt, pars):
+            yield (commit.encode("utf-8"),
+                    title.encode("utf-8", "replace"))
 
     def find_like_commits(self, commit, version):
         self.open()
