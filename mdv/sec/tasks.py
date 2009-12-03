@@ -1219,7 +1219,7 @@ class Interface:
 
     def list_kernel_commits(self, options):
         for commit, title in self.tasks.list_kernel_commits(options.kcommits):
-            print commit, title
+            print commit[:7], title
 
     def find_kernel_cves(self, options):
         for type, extra in self.tasks.find_kernel_cves(options.kcve):
