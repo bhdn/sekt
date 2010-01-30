@@ -58,6 +58,20 @@ def parse_options(args):
     parser.add_option("--kcommit", type="string", nargs=1,
             help="get the first line of a given kernel commit (from "
             "tree pool)")
+    parser.add_option("--mkupd", type="string", nargs=1, default=None,
+            help="create a new update tracker")
+    parser.add_option("--upd", type="string", nargs=1, default=None,
+            help="show an update")
+    parser.add_option("--list-upd", action="store_true", default=False,
+            help="list all active updates")
+    parser.add_option("--with-pkg", action="append", default=[],
+            help="bind a package to the update")
+    parser.add_option("--with-distro", metavar="DISTRO", action="append", default=[],
+            help="bind a distro to a given update")
+    parser.add_option("--with-cve", metavar="CVE", action="append",
+            default=[], help="bind a CVE id to a given update")
+    parser.add_option("--embargo", metavar="DD/MM/YYYY", type="string",
+            help="bind a CVE id to a given update")
     parser.add_option("-f", dest="file", metavar="FILE", type="string",
             nargs=1, help="read from a given file")
     parser.add_option("-y", "--fuzzy", action="store_true", default=False,
@@ -115,6 +129,12 @@ def run(options, args):
                 interface.get_kernel_commit(options)
             if options.kcve:
                 interface.find_kernel_cves(options)
+            if options.mkupd:
+                interface.create_update(options)
+            if options.upd:
+                interface.show_update(options)
+            if options.list_upd:
+                interface.list_updates()
             if options.showrc:
                 interface.dump_conf()
         finally:

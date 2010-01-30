@@ -32,6 +32,9 @@ logs_dir = kernel-changelogs
 download_command = wget --quiet -P $dest -nc '$url'
 url = ftp://ftp.kernel.org/pub/linux/kernel/v2.6/ChangeLog-*
 
+[updates]
+basedir = updates
+
 [kernel_trees]
 
 [cves]
@@ -65,6 +68,14 @@ class PullError(Error):
 class PackageError(Error):
     pass
 
+class UpdateError(Error):
+    pass
+
+class InvalidDate(UpdateError):
+    pass
+
+class UpdateNotFound(UpdateError):
+    pass
 
 def mergeconf(base, another):
     baset = type(base)
@@ -839,6 +850,133 @@ class KernelChangelogPool:
         cur = self._conn.cursor()
         return cur.execute(stmt, parms)
 
+class Update:
+
+    SECTION = "update"
+
+    _config = None
+
+    DEFAULT = """
+[update]
+name =
+package =
+distro =
+cve =
+embargo =
+    """
+
+    def __init__(self, name=None):
+        timestamp = time.strftime("%Y%m%d")
+        if name is None:
+            name = timestamp
+        else:
+            name = name + timestamp
+        self.name = name
+        self._config = ConfigParser.ConfigParser()
+        self._config.readfp(StringIO(self.DEFAULT))
+        self._config.set(self.SECTION, "name", self.name)
+
+    def __repr__(self):
+        sio = StringIO()
+        self._config.write(sio)
+        return sio.getvalue()
+
+    def _append(self, name, value):
+        cur = self._config.get(self.SECTION, name)
+        values = cur.split()
+        values.append(value)
+        new = " ".join(values)
+        self._config.set(self.SECTION, name, new)
+
+    def bind_package(self, name):
+        self._append("package", name)
+
+    def bind_distro(self, name):
+        self._append("distro", name)
+
+    def bind_cveid(self, name):
+        self._append("cve", name)
+
+    def bind_ticket(self, name):
+        self._append("ticket", name)
+
+    def set_embargo(self, date):
+        format = "%d/%m/%Y"
+        try:
+            emb = time.strptime(format)
+        except ValueError:
+            raise InvalidDate, "invalid date: %r" % date
+        dump = time.strftime(format, emb)
+        self._config.set(self.SECTION, "embargo", dump)
+
+    def load(self, raw):
+        self._config.readfp(StringIO(raw))
+
+    def __getattr__(self, name):
+        raw = self._config.get(self.SECTION, name)
+        values = value.split()
+        return values
+
+class UpdatesTracker:
+
+    CURRENT_NAME = "cur"
+
+    def __init__(self, dbdir):
+        self.dbdir = dbdir
+        if not os.path.exists(dbdir):
+            log.debug("created %s" % (dbdir))
+            os.mkdir(self.dbdir)
+
+    def _path(self, name):
+        path = os.path.join(self.dbdir, name)
+        return path
+
+    def get(self, name):
+        path = self._path(name)
+        if not os.path.exists(path):
+            raise UpdateNotFound, "update not found: %s" % (name)
+        f = open(path)
+        raw = f.read()
+        f.close()
+        update = Update()
+        update.load(raw)
+        return update
+
+    def list(self, name=None):
+        names = [name for name in os.listdir(self.dbdir)
+                if not (name.startswith(".") or name.endswith("~")
+                    or name == self.CURRENT_NAME)]
+        return names
+
+    def save(self, update):
+        path = self._path(update.name)
+        f = open(path, "w")
+        f.write(repr(update))
+        log.debug("wrote update dump at %s" % (path))
+        self._reset_link(update.name)
+        f.close()
+
+    def _link_path(self):
+        return os.path.join(self.dbdir, self.CURRENT_NAME)
+
+    def _reset_link(self, name):
+        path = self._path(name)
+        basename = os.path.basename(path)
+        link = self._link_path()
+        if os.path.exists(link):
+            if not os.path.islink(link):
+                raise UpdateError("oops, %s was supposed to be a symlink"
+                        % (link))
+            log.debug("removing %s" % (link))
+            os.unlink(link)
+        log.debug("created link at %s pointing to %s" % (link, basename))
+        os.symlink(basename, link)
+
+    def create(self, name=None):
+        update = Update(name)
+        self.save(update)
+        return update
+
 class TicketSource:
 
     def __init__(self, cvesource, cachepath, base, config):
@@ -905,6 +1043,9 @@ class Paths:
     def kernel_changelogs_database(self):
         return self._workdir_file(self.config.kernel_changelogs.database)
 
+    def updates_dir(self):
+        return self._workdir_file(self.config.updates.basedir)
+
 class SecteamTasks:
 
     class Reasons:
@@ -929,6 +1070,7 @@ class SecteamTasks:
                                                 self.paths.kernel_changelogs_database(),
                                                 self.config, self.paths)
         self.kernel_trees = KernelTreePool(self.config.kernel_trees())
+        self.updates = UpdatesTracker(self.paths.updates_dir())
         self.open_stuff = lambda: None
 
     def pull_cves(self, file=None):
@@ -1108,6 +1250,43 @@ class SecteamTasks:
             for ci2, _version, _message in finditer:
                 yield "found", (ci2, cveid, message)
 
+    def create_update(self, name=None, packages=None, distros=None,
+            cves=None, embargo=None):
+        """
+        Create a new update in the (local) updates tracker
+
+        @name: the task name, optional
+        @packages: list of packages (SRPM) to be bound with the
+                   update
+        @distros: list of distros
+        @cves: list of CVE IDs
+        @embargo: a struct_time object or unix time with the embargo limit
+        date.
+        """
+        self.open_stuff()
+        update = self.updates.create(name)
+        if packages:
+            for package in packages:
+                update.bind_package(package)
+        if distros:
+            for distro in distros:
+                update.bind_distro(distro)
+        if cves:
+            for cveid in cves:
+                update.bind_cveid(cveid)
+        if embargo:
+            update.set_embargo(embargo)
+        self.updates.save(update)
+
+    def show_update(self, name):
+        self.open_stuff()
+        update = self.updates.get(name)
+        return repr(update)
+
+    def list_updates(self):
+        self.open_stuff()
+        return self.updates.list()
+
     def init(self):
         path = self.paths.workdir()
         if os.path.exists(path):
@@ -1232,6 +1411,18 @@ class Interface:
     def get_kernel_commit(self, options):
         for message in self.tasks.get_kernel_commit(options.kcommit):
             print options.kcommit[:8], message
+
+    def create_update(self, options):
+        self.tasks.create_update(options.mkupd,
+                packages=options.with_pkg, distros=options.with_distro,
+                cves=options.with_cve, embargo=options.embargo)
+
+    def show_update(self, options):
+        print self.tasks.show_update(options.upd)
+
+    def list_updates(self):
+        for name in self.tasks.list_updates():
+            print name
 
     def init(self):
         if self.tasks.init():
