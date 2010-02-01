@@ -77,35 +77,44 @@ class InvalidDate(UpdateError):
 class UpdateNotFound(UpdateError):
     pass
 
-class ConfWrapper:
+class SectionWrapper:
 
     _config = None
+    _section = None
 
-    def __init__(self, config, section=None):
+    def __init__(self, config, section):
         self._config = config
         self._section = section
 
     def __getattr__(self, name):
-        if self._section is None:
-            return ConfWrapper(self._config, name)
-        val = self._config.get(self._section, name)
-        return val
+        return self._config.get(self._section, name)
+
+class Config:
+
+    raw_defaults = CONFIG_DEFAULTS
+    _section = None
+    _config = None
+    _sections = {}
+
+    def __init__(self, defaults=None):
+        self._config = ConfigParser.ConfigParser(defaults=defaults)
+        if defaults is None:
+            self.parse(self.raw_defaults)
 
     def __repr__(self):
         output = StringIO()
         self._config.write(output)
         return output.getvalue()
 
-class Config(ConfWrapper):
-
-    raw_defaults = CONFIG_DEFAULTS
-    _section = None
-    _config = None
-
-    def __init__(self, defaults=None):
-        self._config = ConfigParser.ConfigParser(defaults=defaults)
-        if defaults is None:
-            self.parse(self.raw_defaults)
+    def __getattr__(self, name):
+        try:
+            section = self._sections[name]
+        except KeyError:
+            if name not in self._config.sections():
+                raise AttributeError, name
+            section = SectionWrapper(self._config, name)
+            self._sections[name] = section
+        return section
 
     def merge(self, data):
         for section, values in data.iteritems():
