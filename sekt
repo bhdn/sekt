@@ -16,8 +16,6 @@ def parse_options(args):
         parser.values.config_options[levels[0]] = lastv
     parser = optparse.OptionParser("%prog [options]")
     parser.set_defaults(config_options={})
-    parser.add_option("--pull", action="store_true", default=False,
-            help="pulls, fetches, parses everything at once")
     parser.add_option("--pull-cves", action="store_true", default=False,
             help="pull cves from a MITRE's XML text file")
     parser.add_option("--pull-medias", action="store_true", default=False,
@@ -101,8 +99,6 @@ def run(options, args):
                 interface.pull_kernel_trees()
             if options.parse_kernel_changelogs:
                 interface.parse_kernel_changelogs()
-            if options.pull:
-                interface.pull()
             if options.cve:
                 interface.dump_cve(options)
             if options.pkg:

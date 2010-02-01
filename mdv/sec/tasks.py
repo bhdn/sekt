@@ -1344,10 +1344,6 @@ class Interface:
         for name in self.tasks.parse_kernel_changelogs():
             print name
 
-    def pull(self):
-        for status in self.tasks.pull():
-            print status
-
     def correlate_cves_packages(self, options):
         cvegen = self.tasks.correlate_cves_packages(options.cve_keywords,
                 strict=options.strict)

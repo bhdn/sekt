@@ -1,0 +1,14 @@
+#!/usr/bin/python
+from mdv.sec.sekt import SektCommand
+
+class Pull(SektCommand):
+
+    descr = "pulls, fetches, parses all external data needed"
+
+    def run(self):
+        for status in self.tasks.pull():
+            print status
+
+Pull().main()
+
+# vim:ts=4:sw=4:et
