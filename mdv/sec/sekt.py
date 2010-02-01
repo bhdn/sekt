@@ -60,6 +60,10 @@ class SektCommand(object):
             self.update_config(config, opts, args)
             self.setup_logging(config, opts, args)
             tasks = SecteamTasks(config)
-            self.run(config, tasks)
+            self.config = config
+            self.opts = opts
+            self.args = args
+            self.tasks = tasks
+            self.run()
         except Error:
             sys.stderr.write("error: %s\n")

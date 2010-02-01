@@ -5,8 +5,8 @@ class Pkg(SektCommand):
 
     descr = "Dumps configuration values"
 
-    def run(self, config, tasks):
-        print repr(config)
+    def run(self):
+        print repr(self.config)
 
 Pkg().main()
 
