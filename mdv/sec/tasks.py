@@ -1402,12 +1402,6 @@ class Interface:
         for name in self.tasks.list_updates():
             print name
 
-    def init(self):
-        if self.tasks.init():
-            print "done"
-        else:
-            print "already initialized"
-
     def dump_conf(self):
         print repr(self.config)
 

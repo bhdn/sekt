@@ -1,0 +1,16 @@
+#!/usr/bin/python
+from mdv.sec.sekt import SektCommand
+
+class Init(SektCommand):
+
+    descr = "create initial directory structure needed for sekt"
+
+    def run(self):
+        if self.tasks.init():
+            print "done"
+        else:
+            print "already initialized"
+
+Init().main()
+
+# vim:ts=4:sw=4:et
