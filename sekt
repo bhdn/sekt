@@ -32,8 +32,6 @@ def parse_options(args):
             default=False, help="Load kernel changelogs into database")
     parser.add_option("--cve", type="string", default=None,
             help="show information about a given CVE")
-    parser.add_option("--pkg", type="string", default=None,
-            help="find a package (as in urpmq -y)")
     parser.add_option("--cve-keywords", type="string", default=None,
             help="show matching keywords for CVEs")
     parser.add_option("--cve-for-advisory", type="string", default=None,
@@ -49,10 +47,6 @@ def parse_options(args):
             help="find possible CVE fixes in kernel releases")
     parser.add_option("--kcommits", type="string", default=None,
             help="list commits from a given kernel release")
-    parser.add_option("--distro", type="string", default=None,
-            help="filter by distro name (when applicable)")
-    parser.add_option("--media", type="string", default=None,
-            help="filter by media name (when applicable)")
     parser.add_option("-s", "--strict", action="store_true", default=False,
             help="search using exact match")
     parser.add_option("--kcommit", type="string", nargs=1,

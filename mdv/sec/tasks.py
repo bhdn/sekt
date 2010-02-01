@@ -1361,21 +1361,6 @@ class Interface:
             print descr
             print
 
-    def find_packages(self, options):
-        format = "%s\t%s\t%s\t%s"
-        if os.isatty(1):
-            import commands
-            _, rawcols = commands.getoutput('stty size').split()
-            if rawcols:
-                cols = int(rawcols)
-                space = cols / 3
-                format = "%%-%ds %%-%ds %%-%ds %%s" % (space, space,
-                        space - 15)
-        gen = self.tasks.find_packages(options.pkg, media=options.media,
-                distro=options.distro, strict=options.strict)
-        for name, version, media, distro in gen:
-            print format % (name, version, media, distro)
-
     def find_kernel_commit(self, options):
         findgen = self.tasks.find_kernel_commit(options.kci,
                 fuzzy=options.fuzzy)

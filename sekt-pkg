@@ -1,0 +1,36 @@
+#!/usr/bin/python
+import os
+import commands
+from mdv.sec.sekt import SektCommand
+
+class Pkg(SektCommand):
+
+    descr = "Find packages (as in urpmq -y)"
+
+    def init_parser(self, parser):
+        super(Pkg, self).init_parser(parser)
+        parser.add_option("-s", "--strict", action="store_true",
+                default=False, help="search using exact match")
+        parser.add_option("--distro", type="string", default=None,
+                help="filter by distro name (when applicable)")
+        parser.add_option("--media", type="string", default=None,
+                help="filter by media name (when applicable)")
+
+    def run(self):
+        format = "%s\t%s\t%s\t%s"
+        if os.isatty(1):
+            _, rawcols = commands.getoutput('stty size').split()
+            if rawcols:
+                cols = int(rawcols)
+                space = cols / 3
+                format = "%%-%ds %%-%ds %%-%ds %%s" % (space, space,
+                        space - 15)
+        for name in self.args:
+            gen = self.tasks.find_packages(name, media=self.opts.media,
+                    distro=self.opts.distro, strict=self.opts.strict)
+            for name, version, media, distro in gen:
+                print format % (name, version, media, distro)
+
+Pkg().main()
+
+# vim:ts=4:sw=4:et
