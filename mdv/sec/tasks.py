@@ -77,24 +77,6 @@ class InvalidDate(UpdateError):
 class UpdateNotFound(UpdateError):
     pass
 
-def mergeconf(base, another):
-    baset = type(base)
-    merged = another
-    if baset is dict:
-        merged = base.copy()
-        for k, v in another.iteritems():
-            try:
-                basev = base[k]
-            except KeyError:
-                merged[k] = v
-            else:
-                merged[k] = mergeconf(basev, v)
-    elif baset is list:
-        merged = base[::]
-        merged.extend(another)
-    return merged
-
-
 class ConfWrapper:
 
     _config = None
@@ -126,7 +108,9 @@ class Config(ConfWrapper):
             self.parse(self.raw_defaults)
 
     def merge(self, data):
-        self._conf = mergeconf(self._conf, data)
+        for section, values in data.iteritems():
+            for name, value in values.iteritems():
+                self._config.set(section, name, value)
 
     def parse(self, raw):
         self._config.readfp(StringIO(raw))
