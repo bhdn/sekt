@@ -14,17 +14,15 @@ class Cve(SektCommand):
 
     def run(self):
         #TODO iterate over self.args
-        if not self.args:
-            return
-        cveid = self.args[0]
-        try:
-            found = self.tasks.find_cve(cveid,
-                    strict=self.opts.strict, dump=True)
-            for cveid, rawcve in found:
-                print rawcve
-        except IOError, e:
-            if e.errno != 32: # broken pipe
-                raise
+        for cveid in self.args:
+            try:
+                found = self.tasks.find_cve(cveid,
+                        strict=self.opts.strict, dump=True)
+                for cveid, rawcve in found:
+                    print rawcve
+            except IOError, e:
+                if e.errno != 32: # broken pipe
+                    raise
 
 Cve().main()
 
