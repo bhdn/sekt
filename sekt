@@ -75,8 +75,6 @@ def run(options, args):
     interface = Interface(config, tasks)
     try:
         try:
-            if options.cve_for_advisory:
-                interface.cve_for_advisory(options)
             if options.cve_keywords:
                 interface.correlate_cves_packages(options)
             if options.kci:

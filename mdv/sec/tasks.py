@@ -1348,12 +1348,6 @@ class Interface:
             if status == "F":
                 print status, args[0], " ".join(args[1])
 
-    def cve_for_advisory(self, options):
-        cve = options.cve_for_advisory
-        for descr in self.tasks.cve_for_advisory(cve):
-            print descr
-            print
-
     def find_kernel_commit(self, options):
         findgen = self.tasks.find_kernel_commit(options.kci,
                 fuzzy=options.fuzzy)

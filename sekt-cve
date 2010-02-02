@@ -11,15 +11,19 @@ class Cve(SektCommand):
         super(Cve, self).init_parser(parser)
         parser.add_option("-s", "--strict", action="store_true",
                 default=False, help="search using exact match")
+        parser.add_option("-a", "--advisory", action="store_true",
+                default=False,
+                help="dump it in the format used by Mandriva advisories")
 
     def run(self):
-        #TODO iterate over self.args
         for cveid in self.args:
             try:
-                found = self.tasks.find_cve(cveid,
-                        strict=self.opts.strict, dump=True)
-                for cveid, rawcve in found:
-                    print rawcve
+                found = self.tasks.find_cve(cveid, strict=self.opts.strict)
+                for cve in found:
+                    if self.opts.advisory:
+                        print cve
+                    else:
+                        print "%s (%s)\n" % (cve.description, cve.cveid)
             except IOError, e:
                 if e.errno != 32: # broken pipe
                     raise
