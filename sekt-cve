@@ -14,23 +14,14 @@ class Cve(SektCommand):
 
     def run(self):
         #TODO iterate over self.args
-        if not args:
+        if not self.args:
             return
+        cveid = self.args[0]
         try:
             found = self.tasks.find_cve(cveid,
                     strict=self.opts.strict, dump=True)
-            if os.isatty(1) and not os.getenv("SEKT_NOPIPE"):
-                import subprocess
-                p = subprocess.Popen(["less"], stdin=subprocess.PIPE)
-                try:
-                    for cveid, dump in found:
-                        p.stdin.write(dump)
-                        p.stdin.write("\n")
-                finally:
-                    p.stdin.close()
-                    p.wait()
-            else:
-                sys.stdout.writelines(rawcve for cveid, rawcve in found)
+            for cveid, rawcve in found:
+                print rawcve
         except IOError, e:
             if e.errno != 32: # broken pipe
                 raise
