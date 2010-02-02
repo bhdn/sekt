@@ -1337,12 +1337,9 @@ class Interface:
                 elif status in ("parsing", "skiping"):
                     print status, args[0], args[1]
 
-    def pull_kernel_trees(self):
-        self.tasks.pull_kernel_trees()
-
-    def parse_kernel_changelogs(self):
-        for name in self.tasks.parse_kernel_changelogs():
-            print name
+    def pull(self):
+        for status in self.tasks.pull():
+            print status
 
     def correlate_cves_packages(self, options):
         cvegen = self.tasks.correlate_cves_packages(options.cve_keywords,
@@ -1398,25 +1395,7 @@ class Interface:
         for name in self.tasks.list_updates():
             print name
 
-    def dump_conf(self):
-        print repr(self.config)
-
-    def dump_cve(self, options):
-        try:
-            found = self.tasks.find_cve(options.cve,
-                    strict=options.strict, dump=True)
-            if os.isatty(1) and not os.getenv("SEKT_NOPIPE"):
-                import subprocess
-                p = subprocess.Popen(["less"], stdin=subprocess.PIPE)
-                try:
-                    for cveid, dump in found:
-                        p.stdin.write(dump)
-                        p.stdin.write("\n")
-                finally:
-                    p.stdin.close()
-                    p.wait()
-            else:
-                sys.stdout.writelines(rawcve for cveid, rawcve in found)
-        except IOError, e:
-            if e.errno != 32: # broken pipe
-                raise
+        if self.tasks.init():
+            print "done"
+        else:
+            print "already initialized"

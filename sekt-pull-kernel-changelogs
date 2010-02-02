@@ -1,0 +1,29 @@
+#!/usr/bin/python
+from mdv.sec.sekt import SektCommand
+
+import os
+import math
+
+class PullKernelChangelogs(SektCommand):
+
+    descr = "pull new kernel changelogs"
+
+    def init_parser(self, parser):
+        super(self, PullKernelChangelogs).init_parser(parser)
+        parser.add_option("-P", "--no-parse", action="store_false",
+                          dest="parse", default=True,
+                          help="do not parse changelogs")
+        parser.add_option("-F", "--no-fetch", action="store_false",
+                          dest="fetch", default=True,
+                          help="do not fetch changelogs")
+
+    def run(self):
+        if self.opts.fetch:
+            self.tasks.fetch_kernel_changelogs()
+        if self.opts.parse:
+            for name in self.tasks.parse_kernel_changelogs():
+                print name
+
+PullKernelChangelogs().main()
+
+# vim:ts=4:sw=4:et

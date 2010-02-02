@@ -1,0 +1,16 @@
+#!/usr/bin/python
+from mdv.sec.sekt import SektCommand
+
+import os
+import math
+
+class PullKernelTrees(SektCommand):
+
+    descr = "fetch and update all kernel trees"
+
+    def run(self):
+        self.tasks.pull_kernel_trees()
+
+PullKernelTrees().main()
+
+# vim:ts=4:sw=4:et

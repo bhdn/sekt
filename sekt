@@ -16,18 +16,8 @@ def parse_options(args):
         parser.values.config_options[levels[0]] = lastv
     parser = optparse.OptionParser("%prog [options]")
     parser.set_defaults(config_options={})
-    parser.add_option("--pull-cves", action="store_true", default=False,
-            help="pull cves from a MITRE's XML text file")
-    parser.add_option("--pull-medias", action="store_true", default=False,
-            help="Pull packages from medias")
-    parser.add_option("--fetch-kernel-changelogs", action="store_true",
-            default=False, help="Download new kernel changelogs")
-    parser.add_option("--pull-kernel-trees", action="store_true",
-            help="fetch and update all configure kernel trees")
     parser.add_option("--parse-kernel-changelogs", action="store_true",
             default=False, help="Load kernel changelogs into database")
-    parser.add_option("--cve", type="string", default=None,
-            help="show information about a given CVE")
     parser.add_option("--cve-keywords", type="string", default=None,
             help="show matching keywords for CVEs")
     parser.add_option("--cve-for-advisory", type="string", default=None,
@@ -62,8 +52,6 @@ def parse_options(args):
             default=[], help="bind a CVE id to a given update")
     parser.add_option("--embargo", metavar="DD/MM/YYYY", type="string",
             help="bind a CVE id to a given update")
-    parser.add_option("-f", dest="file", metavar="FILE", type="string",
-            nargs=1, help="read from a given file")
     parser.add_option("-y", "--fuzzy", action="store_true", default=False,
             help="search using approximate search (as in urpmq -y)")
     parser.add_option("--showrc", action="store_true", default=False,
@@ -87,18 +75,6 @@ def run(options, args):
     interface = Interface(config, tasks)
     try:
         try:
-            if options.pull_cves:
-                interface.pull_cves(options)
-            if options.pull_medias:
-                interface.pull_packages()
-            if options.fetch_kernel_changelogs:
-                interface.fetch_kernel_changelogs()
-            if options.pull_kernel_trees:
-                interface.pull_kernel_trees()
-            if options.parse_kernel_changelogs:
-                interface.parse_kernel_changelogs()
-            if options.cve:
-                interface.dump_cve(options)
             if options.cve_for_advisory:
                 interface.cve_for_advisory(options)
             if options.cve_keywords:

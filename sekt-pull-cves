@@ -1,0 +1,29 @@
+#!/usr/bin/python
+from mdv.sec.sekt import SektCommand
+
+import os
+
+class PullCves(SektCommand):
+
+    descr = "pull cves from a MITRE's XML text file"
+
+    def init_parser(self, parser):
+        super(PullCves, self).init_parser(parser)
+        parser.add_option("-f", dest="file", metavar="FILE", type="string",
+                nargs=1, help="read from a given file")
+
+    def run(self):
+        show = os.isatty(1)
+        newcount = 0
+        i = 0
+        for i, new in enumerate(self.tasks.pull_cves(self.opts.file)):
+            if new:
+                newcount += 1
+            if show and i % 1000 == 0:
+                print i
+        if show:
+            print "%d parsed, %d new" % (i, newcount)
+
+PullCves().main()
+
+# vim:ts=4:sw=4:et

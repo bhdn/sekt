@@ -11,9 +11,9 @@ class Pkg(SektCommand):
         super(Pkg, self).init_parser(parser)
         parser.add_option("-s", "--strict", action="store_true",
                 default=False, help="search using exact match")
-        parser.add_option("--distro", type="string", default=None,
+        parser.add_option("-d", "--distro", type="string", default=None,
                 help="filter by distro name (when applicable)")
-        parser.add_option("--media", type="string", default=None,
+        parser.add_option("-m", "--media", type="string", default=None,
                 help="filter by media name (when applicable)")
 
     def run(self):

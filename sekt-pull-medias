@@ -1,0 +1,30 @@
+#!/usr/bin/python
+from mdv.sec.sekt import SektCommand
+
+import os
+import math
+
+class PullMedias(SektCommand):
+
+    descr = "pull packages from medias"
+
+    def run(self):
+        prev = 0
+        show = os.isatty(1)
+        for status, args in self.tasks.pull_packages():
+            if show:
+                if status == "progress":
+                    progress = args
+                    rounded = math.ceil(progress)
+                    if rounded % 2.0 == 0 and rounded > prev:
+                        prev = rounded
+                        print ("%d%%\r" % progress),
+                        sys.stdout.flush()
+                        if prev >= 100:
+                            prev = 0
+                elif status in ("parsing", "skiping"):
+                    print status, args[0], args[1]
+
+PullMedias().main()
+
+# vim:ts=4:sw=4:et

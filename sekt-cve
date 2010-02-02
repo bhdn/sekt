@@ -1,0 +1,40 @@
+#!/usr/bin/python
+from mdv.sec.sekt import SektCommand
+
+import os
+
+class Cve(SektCommand):
+
+    descr = "show information about a given CVE"
+
+    def init_parser(self, parser):
+        super(Cve, self).init_parser(parser)
+        parser.add_option("-s", "--strict", action="store_true",
+                default=False, help="search using exact match")
+
+    def run(self):
+        #TODO iterate over self.args
+        if not args:
+            return
+        try:
+            found = self.tasks.find_cve(cveid,
+                    strict=self.opts.strict, dump=True)
+            if os.isatty(1) and not os.getenv("SEKT_NOPIPE"):
+                import subprocess
+                p = subprocess.Popen(["less"], stdin=subprocess.PIPE)
+                try:
+                    for cveid, dump in found:
+                        p.stdin.write(dump)
+                        p.stdin.write("\n")
+                finally:
+                    p.stdin.close()
+                    p.wait()
+            else:
+                sys.stdout.writelines(rawcve for cveid, rawcve in found)
+        except IOError, e:
+            if e.errno != 32: # broken pipe
+                raise
+
+Cve().main()
+
+# vim:ts=4:sw=4:et
