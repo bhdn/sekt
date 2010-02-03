@@ -65,5 +65,5 @@ class SektCommand(object):
             self.args = args
             self.tasks = tasks
             self.run()
-        except Error:
-            sys.stderr.write("error: %s\n")
+        except Error, e:
+            sys.stderr.write("error: %s\n" % (e))
