@@ -18,8 +18,6 @@ def parse_options(args):
     parser.set_defaults(config_options={})
     parser.add_option("--parse-kernel-changelogs", action="store_true",
             default=False, help="Load kernel changelogs into database")
-    parser.add_option("--cve-keywords", type="string", default=None,
-            help="show matching keywords for CVEs")
     parser.add_option("--cve-for-advisory", type="string", default=None,
             help="dumps the CVE description (to be used in MDV"
             " advisories)")
@@ -75,8 +73,6 @@ def run(options, args):
     interface = Interface(config, tasks)
     try:
         try:
-            if options.cve_keywords:
-                interface.correlate_cves_packages(options)
             if options.kci:
                 interface.find_kernel_commit(options)
             if options.kreleases:
