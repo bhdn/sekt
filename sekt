@@ -16,8 +16,6 @@ def parse_options(args):
         parser.values.config_options[levels[0]] = lastv
     parser = optparse.OptionParser("%prog [options]")
     parser.set_defaults(config_options={})
-    parser.add_option("--parse-kernel-changelogs", action="store_true",
-            default=False, help="Load kernel changelogs into database")
     parser.add_option("--kreleases", action="store_true", default=False,
             help="list all kernel releases")
     parser.add_option("--kcve", type="string", metavar="KERNELVER",
