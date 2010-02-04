@@ -1,0 +1,21 @@
+#!/usr/bin/python
+from mdv.sec.sekt import SektCommand
+
+class Kreleases(SektCommand):
+
+    descr = "list all kernel releases"
+
+    def init_parser(self, parser):
+        super(Kreleases, self).init_parser(parser)
+
+    def run(self):
+        def split(ver):
+            return [int(x) for x in ver.split(".")], ver
+        releases = [split(ver) for ver in
+                self.tasks.list_kernel_releases()]
+        for split, ver in sorted(releases):
+            print ver
+
+Kreleases().main()
+
+# vim:ts=4:sw=4:et

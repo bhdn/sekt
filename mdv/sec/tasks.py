@@ -1350,10 +1350,6 @@ class Interface:
     def fetch_kernel_changelogs(self):
         self.tasks.fetch_kernel_changelogs()
 
-    def list_kernel_releases(self):
-        for release in self.tasks.list_kernel_releases():
-            print release
-
     def list_kernel_commits(self, options):
         for commit, title in self.tasks.list_kernel_commits(options.kcommits):
             print commit[:7], title

@@ -16,8 +16,6 @@ def parse_options(args):
         parser.values.config_options[levels[0]] = lastv
     parser = optparse.OptionParser("%prog [options]")
     parser.set_defaults(config_options={})
-    parser.add_option("--kreleases", action="store_true", default=False,
-            help="list all kernel releases")
     parser.add_option("--kcve", type="string", metavar="KERNELVER",
             default="",
             help="find possible CVE fixes in kernel releases")
@@ -65,8 +63,6 @@ def run(options, args):
     interface = Interface(config, tasks)
     try:
         try:
-            if options.kreleases:
-                interface.list_kernel_releases()
             if options.kcommits:
                 interface.list_kernel_commits(options)
             if options.kcommit:
