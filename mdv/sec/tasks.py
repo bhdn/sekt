@@ -462,6 +462,9 @@ class PackagePool:
             distro TEXT,
             timestamp INTEGER);
 
+        CREATE TABLE pkg_names (
+            name TEXT PRIMARY KEY);
+
         CREATE INDEX pkg_name ON pkg (name);
         CREATE INDEX pkg_media_id ON pkg (media_id);
         CREATE INDEX media_match ON media (name, distro);
@@ -557,10 +560,13 @@ class PackagePool:
         pars = (pkg.name, pkg.evr, provides, requires, pkg.summary,
                 media.id)
         cur.execute(stmt, pars)
+        stmt = "INSERT OR IGNORE INTO pkg_names (name) VALUES (?);"
+        pars = (pkg.name,)
+        cur.execute(stmt, pars)
 
     def package_names(self):
         self.open()
-        stmt = "SELECT DISTINCT name FROM pkg"
+        stmt = "SELECT name FROM pkg_names"
         cur = self._conn.cursor()
         return (name for (name,) in cur.execute(stmt))
 
@@ -1340,13 +1346,6 @@ class Interface:
     def pull(self):
         for status in self.tasks.pull():
             print status
-
-    def correlate_cves_packages(self, options):
-        cvegen = self.tasks.correlate_cves_packages(options.cve_keywords,
-                strict=options.strict)
-        for status, args in cvegen:
-            if status == "F":
-                print status, args[0], " ".join(args[1])
 
     def find_kernel_commit(self, options):
         findgen = self.tasks.find_kernel_commit(options.kci,
