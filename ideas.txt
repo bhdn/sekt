@@ -15,6 +15,9 @@ Tasks that could be implemented in sekt:
 - bind advisory tickets to MDVSA (or MDVAs) numbers
 - bind stable kernel releases with CVE fixes (in order to ease generating
   the kernel update changelog)
+- allow quick browsing the list of recent ("unread") CVEs and then checking
+  which ones really are kernel related and which ones should be reported in
+  our Bugzilla
 
 What it can't do:
 
