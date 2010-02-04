@@ -1,0 +1,25 @@
+#!/usr/bin/python
+from mdv.sec.sekt import SektCommand
+
+class Kci(SektCommand):
+
+    usage = "%prog [options] <commit title>"
+    descr = "find kernel releases with a given commit message (strict" \
+            " by default)"
+
+    def init_parser(self, parser):
+        super(Kci, self).init_parser(parser)
+        parser.add_option("-y", "--fuzzy", action="store_true",
+                default=False,
+                help="search using approximate search (as in urpmq -y)")
+
+    def run(self):
+        for arg in self.args:
+            findgen = self.tasks.find_kernel_commit(arg,
+                    fuzzy=self.opts.fuzzy)
+            for commit, version, message in findgen:
+                print commit, version, message
+
+Kci().main()
+
+# vim:ts=4:sw=4:et

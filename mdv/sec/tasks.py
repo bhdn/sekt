@@ -1347,12 +1347,6 @@ class Interface:
         for status in self.tasks.pull():
             print status
 
-    def find_kernel_commit(self, options):
-        findgen = self.tasks.find_kernel_commit(options.kci,
-                fuzzy=options.fuzzy)
-        for commit, version, message in findgen:
-            print commit, version, message
-
     def fetch_kernel_changelogs(self):
         self.tasks.fetch_kernel_changelogs()
 
