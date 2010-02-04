@@ -1,6 +1,7 @@
 #!/usr/bin/python
 from mdv.sec.sekt import SektCommand
 
+import sys
 import os
 import math
 
