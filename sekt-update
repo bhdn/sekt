@@ -14,8 +14,14 @@ update, such as generating the advisory text, opening the ticket, etc.
 So far, it only can create "updates" and bind some information on it.
 """
 
+USAGE = """
+  %prog --create <name> [create options]
+  %prog --list
+  %prog --show <name>"""
+
 class Kcve(SektCommand):
 
+    usage = USAGE
     descr = DESCR
 
     def init_parser(self, parser):
