@@ -1,0 +1,24 @@
+#!/usr/bin/python
+from mdv.sec.sekt import SektCommand
+
+class Kcve(SektCommand):
+
+    usage = "%prog <kernel releae> ..."
+    descr = "find possible CVE fixes in kernel releases"
+
+    def init_parser(self, parser):
+        super(Kcve, self).init_parser(parser)
+
+    def run(self):
+        for release in self.args:
+            print "%s:" % (release)
+            for type, extra in self.tasks.find_kernel_cves(release):
+                if type == "status":
+                    print "*", extra
+                else:
+                    ci, cveid, message = extra
+                    print cveid, ci[:8], message
+
+Kcve().main()
+
+# vim:ts=4:sw=4:et

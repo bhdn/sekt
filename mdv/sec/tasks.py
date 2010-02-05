@@ -1350,14 +1350,6 @@ class Interface:
     def fetch_kernel_changelogs(self):
         self.tasks.fetch_kernel_changelogs()
 
-    def find_kernel_cves(self, options):
-        for type, extra in self.tasks.find_kernel_cves(options.kcve):
-            if type == "status":
-                print "*", extra
-            else:
-                ci, cveid, message = extra
-                print cveid, ci[:8], message
-
     def create_update(self, options):
         self.tasks.create_update(options.mkupd,
                 packages=options.with_pkg, distros=options.with_distro,

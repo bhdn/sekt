@@ -16,9 +16,6 @@ def parse_options(args):
         parser.values.config_options[levels[0]] = lastv
     parser = optparse.OptionParser("%prog [options]")
     parser.set_defaults(config_options={})
-    parser.add_option("--kcve", type="string", metavar="KERNELVER",
-            default="",
-            help="find possible CVE fixes in kernel releases")
     parser.add_option("-s", "--strict", action="store_true", default=False,
             help="search using exact match")
     parser.add_option("--mkupd", type="string", nargs=1, default=None,
@@ -58,8 +55,6 @@ def run(options, args):
     interface = Interface(config, tasks)
     try:
         try:
-            if options.kcve:
-                interface.find_kernel_cves(options)
             if options.mkupd:
                 interface.create_update(options)
             if options.upd:
