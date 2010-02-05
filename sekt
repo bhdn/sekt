@@ -21,9 +21,6 @@ def parse_options(args):
             help="find possible CVE fixes in kernel releases")
     parser.add_option("-s", "--strict", action="store_true", default=False,
             help="search using exact match")
-    parser.add_option("--kcommit", type="string", nargs=1,
-            help="get the first line of a given kernel commit (from "
-            "tree pool)")
     parser.add_option("--mkupd", type="string", nargs=1, default=None,
             help="create a new update tracker")
     parser.add_option("--upd", type="string", nargs=1, default=None,
@@ -61,8 +58,6 @@ def run(options, args):
     interface = Interface(config, tasks)
     try:
         try:
-            if options.kcommit:
-                interface.get_kernel_commit(options)
             if options.kcve:
                 interface.find_kernel_cves(options)
             if options.mkupd:

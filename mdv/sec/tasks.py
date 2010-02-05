@@ -1358,10 +1358,6 @@ class Interface:
                 ci, cveid, message = extra
                 print cveid, ci[:8], message
 
-    def get_kernel_commit(self, options):
-        for message in self.tasks.get_kernel_commit(options.kcommit):
-            print options.kcommit[:8], message
-
     def create_update(self, options):
         self.tasks.create_update(options.mkupd,
                 packages=options.with_pkg, distros=options.with_distro,

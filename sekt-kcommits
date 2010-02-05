@@ -3,16 +3,24 @@ from mdv.sec.sekt import SektCommand
 
 class Kcommits(SektCommand):
 
-    usage = "%prog <kernel version> ..."
+    usage = "%prog [options] <kernel version> ... | -c <git commit>"
     descr = "list commits from a given kernel release"
 
     def init_parser(self, parser):
         super(Kcommits, self).init_parser(parser)
+        parser.add_option("-c", "--commit", type="string",
+                metavar="COMMIT",
+                help="shows the first line of a given kernel commit (no "
+                      "shorter matching)")
 
     def run(self):
-        for version in self.args:
-            for commit, title in self.tasks.list_kernel_commits(version):
-                print commit[:7], title
+        if self.opts.commit:
+            for message in self.tasks.get_kernel_commit(self.opts.commit):
+                print options.kcommit[:8], message
+        else:
+            for version in self.args:
+                for commit, title in self.tasks.list_kernel_commits(version):
+                    print commit[:7], title
 
 Kcommits().main()
 
