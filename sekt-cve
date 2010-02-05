@@ -21,9 +21,9 @@ class Cve(SektCommand):
                 found = self.tasks.find_cve(cveid, strict=self.opts.strict)
                 for cve in found:
                     if self.opts.advisory:
-                        print cve
-                    else:
                         print "%s (%s)\n" % (cve.description, cve.cveid)
+                    else:
+                        print cve
             except IOError, e:
                 if e.errno != 32: # broken pipe
                     raise
