@@ -2,66 +2,27 @@
 import sys
 import os
 
-def parse_options(args):
-    import optparse
-    def parse_option(option, opt_str, value, parser, *args, **kwargs):
-        kv = value.split("=", 1)
-        if len(kv) != 2:
-           raise optparse.OptionValueError, "-o accepts values only in "\
-                   "the name=value form"
-        levels = kv[0].split(".")
-        lastv = kv[1]
-        for name in levels[:0:-1]:
-            lastv = {name: lastv}
-        parser.values.config_options[levels[0]] = lastv
-    parser = optparse.OptionParser("%prog [options]")
-    parser.set_defaults(config_options={})
-    parser.add_option("-s", "--strict", action="store_true", default=False,
-            help="search using exact match")
-    parser.add_option("-y", "--fuzzy", action="store_true", default=False,
-            help="search using approximate search (as in urpmq -y)")
-    parser.add_option("--showrc", action="store_true", default=False,
-            help="dump sekt configuration")
-    parser.add_option("-v", "--verbose", action="store_true", default=False)
-    parser.add_option("-o", "--option", type="string", action="callback",
-            callback=parse_option,
-            help="set one configuration option in the form opt=val")
-    parsed = parser.parse_args(args)
-    return parsed
+def usage():
+    print """
+sekt
 
-def run(options, args):
-    from mdv.sec.tasks import Interface, Config, SecteamTasks, Error
-    config = Config()
-    config.merge(options.config_options)
-    path = (os.environ.get(config.conf.path_environment) or
-            os.path.expanduser(os.path.join("~", config.conf.user_file)))
-    if os.path.exists(path):
-        config.load(path)
-    tasks = SecteamTasks(config)
-    interface = Interface(config, tasks)
-    try:
-        try:
-            pass
-        finally:
-            tasks.finish()
-    except Error, e:
-        sys.stderr.write("error: %s\n" % e)
-        sys.exit(1)
-    except KeyboardInterrupt:
-        sys.stderr.write("interrupted\n")
-        sys.exit(1)
+See sekt-<tab>.
 
-def setup_logging(options):
-    import logging
-    if options.verbose:
-        logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.ERROR)
+See ~/.sekt.conf.
+"""
 
 def main():
-    options, args = parse_options(sys.argv)
-    setup_logging(options)
-    run(options, args)
+    if len(sys.argv) < 2:
+        usage()
+    else:
+        dir = os.path.dirname(__file__)
+        name = "sekt-" + sys.argv[1]
+        prog = os.path.join(dir, name)
+        if os.path.exists(prog):
+            args = [name] + sys.argv[2:]
+            os.execv(prog, args)
 
 if __name__ == "__main__":
     main()
+
+# vim:ts=4:sw=4:et
