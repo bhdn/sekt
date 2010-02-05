@@ -21,6 +21,8 @@ def main():
         if os.path.exists(prog):
             args = [name] + sys.argv[2:]
             os.execv(prog, args)
+        else:
+            usage()
 
 if __name__ == "__main__":
     main()
