@@ -73,3 +73,5 @@ class SektCommand(object):
             self.run()
         except Error, e:
             sys.stderr.write("error: %s\n" % (e))
+        except KeyboardInterrupt:
+            sys.stderr.write("interrupted\n")
