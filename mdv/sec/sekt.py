@@ -4,13 +4,19 @@ import optparse
 
 from mdv.sec.tasks import Config, SecteamTasks, Error
 
+class DontGetInTheWayFormatter(optparse.IndentedHelpFormatter):
+    """Class only intended to go around the crappy text wrapper"""
+
+    def format_description(self, description):
+        return description
+
 class SektCommand(object):
 
     descr = "The base sekt command."
     usage = "[options] [args]"
 
     def create_parser(self):
-        parser = optparse.OptionParser()
+        parser = optparse.OptionParser(formatter=DontGetInTheWayFormatter())
         return parser
 
     def init_parser(self, parser):
