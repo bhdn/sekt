@@ -19,8 +19,6 @@ def parse_options(args):
     parser.add_option("--kcve", type="string", metavar="KERNELVER",
             default="",
             help="find possible CVE fixes in kernel releases")
-    parser.add_option("--kcommits", type="string", default=None,
-            help="list commits from a given kernel release")
     parser.add_option("-s", "--strict", action="store_true", default=False,
             help="search using exact match")
     parser.add_option("--kcommit", type="string", nargs=1,
@@ -63,8 +61,6 @@ def run(options, args):
     interface = Interface(config, tasks)
     try:
         try:
-            if options.kcommits:
-                interface.list_kernel_commits(options)
             if options.kcommit:
                 interface.get_kernel_commit(options)
             if options.kcve:

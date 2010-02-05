@@ -1,0 +1,19 @@
+#!/usr/bin/python
+from mdv.sec.sekt import SektCommand
+
+class Kcommits(SektCommand):
+
+    usage = "%prog <kernel version> ..."
+    descr = "list commits from a given kernel release"
+
+    def init_parser(self, parser):
+        super(Kcommits, self).init_parser(parser)
+
+    def run(self):
+        for version in self.args:
+            for commit, title in self.tasks.list_kernel_commits(version):
+                print commit[:7], title
+
+Kcommits().main()
+
+# vim:ts=4:sw=4:et
