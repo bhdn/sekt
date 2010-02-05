@@ -1,0 +1,73 @@
+#!/usr/bin/python
+from mdv.sec.sekt import SektCommand
+
+import optparse
+
+DESCR = """Manages information about updates.
+
+An "update" holds information about packages, CVEs, distros, tickets and
+anything else that is related to a package update in Mandriva Linux.
+
+All this information is then used to perform real actions regarding the
+update, such as generating the advisory text, opening the ticket, etc.
+
+So far, it only can create "updates" and bind some information on it.
+"""
+
+class Kcve(SektCommand):
+
+    descr = DESCR
+
+    def init_parser(self, parser):
+        super(Kcve, self).init_parser(parser)
+        group = optparse.OptionGroup(parser, "Main operations")
+
+        group.add_option("-c", "--create", action="store_true",
+                default=False, help="create an update named NAME")
+        group.add_option("-l", "--list", action="store_true",
+                default=False, help="list active updates")
+        group.add_option("-s", "--show", action="store_true",
+                default=False, help="shows an update")
+        parser.add_option_group(group)
+
+        group = optparse.OptionGroup(parser, "Options for --create")
+        group.add_option("-p", "--package", type="string", metavar="PKGNAME",
+                help="associate a package with the update")
+        group.add_option("-d", "--distro", type="string", metavar="DISTRO",
+                help="distro version")
+        group.add_option("-C", "--cve", type="string", metavar="CVEID",
+                help="a CVE number")
+        group.add_option("-t", "--ticket", type="string",
+                metavar="TICKETNUMBER",
+                help="a bugzilla ticket")
+        group.add_option("-e", "--embargo", type="string", metavar="DATE",
+                help="date when the embargoed update is lifted (DD/MM or "
+                "DD/MM/YYYY)")
+        parser.add_option_group(group)
+
+    def run(self):
+        if self.opts.create:
+            self.create()
+        elif self.opts.list:
+            self.list()
+        else:
+            # elif self.opts.show:
+            self.show()
+
+    def create(self):
+        for name in self.args:
+            self.tasks.create_update(name, packages=self.opts.package,
+                    distros=self.opts.distro, cves=self.opts.cve,
+                    embargo=self.opts.embargo)
+
+    def list(self):
+        for name in self.tasks.list_updates():
+            print name
+
+    def show(self):
+        for name in self.args:
+            print self.tasks.show_update(name),
+
+Kcve().main()
+
+# vim:ts=4:sw=4:et

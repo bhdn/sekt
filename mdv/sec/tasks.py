@@ -1349,20 +1349,3 @@ class Interface:
 
     def fetch_kernel_changelogs(self):
         self.tasks.fetch_kernel_changelogs()
-
-    def create_update(self, options):
-        self.tasks.create_update(options.mkupd,
-                packages=options.with_pkg, distros=options.with_distro,
-                cves=options.with_cve, embargo=options.embargo)
-
-    def show_update(self, options):
-        print self.tasks.show_update(options.upd)
-
-    def list_updates(self):
-        for name in self.tasks.list_updates():
-            print name
-
-        if self.tasks.init():
-            print "done"
-        else:
-            print "already initialized"
