@@ -8,16 +8,6 @@ import logging
 from cStringIO import StringIO
 import ConfigParser
 
-# external deps:
-
-#import bugz
-
-# yes, I hate high import times:
-
-def bugz():
-    import bugz
-    return bugz
-
 CONFIG_DEFAULTS = """\
 [sekt]
 workdir = ~/sekt/
