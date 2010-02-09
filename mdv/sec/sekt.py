@@ -8,6 +8,8 @@ class DontGetInTheWayFormatter(optparse.IndentedHelpFormatter):
     """Class only intended to go around the crappy text wrapper"""
 
     def format_description(self, description):
+        if not description.endswith("\n"):
+            return description + "\n"
         return description
 
 class SektCommand(object):
