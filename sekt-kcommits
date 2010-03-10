@@ -16,7 +16,7 @@ class Kcommits(SektCommand):
     def run(self):
         if self.opts.commit:
             for message in self.tasks.get_kernel_commit(self.opts.commit):
-                print options.kcommit[:8], message
+                print self.opts.commit[:8], message
         else:
             for version in self.args:
                 for commit, title in self.tasks.list_kernel_commits(version):
