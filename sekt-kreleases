@@ -7,14 +7,35 @@ class Kreleases(SektCommand):
 
     def init_parser(self, parser):
         super(Kreleases, self).init_parser(parser)
+        parser.add_option("-l", "--latest", action="store_true",
+                default=False,
+                help="only show most recent stable releases")
 
     def run(self):
         def split(ver):
             return [int(x) for x in ver.split(".")], ver
         releases = [split(ver) for ver in
                 self.tasks.list_kernel_releases()]
-        for split, ver in sorted(releases):
-            print ver
+        if self.opts.latest:
+            pairs = []
+            release = None
+            stable = None
+            for split, ver in sorted(releases):
+                if len(split) == 3:
+                    if stable:
+                        pairs.append((release, stable))
+                    release = ver
+                    stable = None
+                elif len(split) >= 4:
+                    stable = ver
+            if stable is None and ver:
+                pairs.append((ver, None))
+            for release, stable in pairs:
+                print release, "=>",
+                print stable or ""
+        else:
+            for split, ver in sorted(releases):
+                print ver
 
 Kreleases().main()
 
