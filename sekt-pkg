@@ -19,7 +19,7 @@ class Pkg(SektCommand):
     def run(self):
         format = "%s\t%s\t%s\t%s"
         if os.isatty(1):
-            _, rawcols = commands.getoutput('stty size').split()
+            _, rawcols = commands.getoutput("stty size").split()
             if rawcols:
                 cols = int(rawcols)
                 space = cols / 3
