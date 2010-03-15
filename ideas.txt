@@ -22,3 +22,23 @@ Tasks that could be implemented in sekt:
 What it can't do:
 
 - run mkadvisory!
+
+Random idea: Semantic network
+
+A bunch of objects (uniquely identified by a string) related to any other
+object in this space. The relation is also described by a string.
+
+Whenever a new object enters the object space, some watchers will check the
+object type (another string) and (if needed) semantically inspect their
+contents in order to find some special property. If they do, they create
+another relation of this object with another object in the system OR one or
+more new objects.
+
+For example, a CVE entry would be one object. An upstream kernel release
+would be another, but would also render new "git-commit" objects, which, in
+turn, could be bound to CVE entries, because they fix some kernel
+vulnerability.
+
+Why all this crap: it would be easier to create relations between objects,
+and also because they would be readily available when querying for them
+(this opposed to relating objects on query-time).
