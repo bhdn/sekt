@@ -28,8 +28,8 @@ class Kreleases(SektCommand):
                     stable = None
                 elif len(split) >= 4:
                     stable = ver
-            if stable is None and ver:
-                pairs.append((ver, None))
+            if release:
+                pairs.append((release, stable))
             for release, stable in pairs:
                 print release, "=>",
                 print stable or ""
