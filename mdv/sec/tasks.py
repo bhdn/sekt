@@ -1267,6 +1267,17 @@ class SecteamTasks:
             update.set_embargo(embargo)
         self.updates.save(update)
 
+    def dump_update(self, name):
+        self.open_stuff()
+        update = self.updates.get(name)
+        return repr(update)
+
+    def save_update(self, name, rawcontents):
+        self.open_stuff()
+        update = self.updates.get(name)
+        update.load(rawcontents)
+        self.updates.save(update)
+
     def show_update(self, name):
         self.open_stuff()
         update = self.updates.get(name)
