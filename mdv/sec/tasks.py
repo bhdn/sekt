@@ -609,7 +609,7 @@ class KernelTreePool:
 
     def pull(self):
         for path in self.paths:
-            os.system("cd %s; git pull -q" % path)
+            os.system("cd %s; git pull -q > /dev/null" % path)
 
     def find_commit(self, commitid):
         import commands
