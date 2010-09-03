@@ -966,6 +966,33 @@ class UpdatesTracker:
         self.save(update)
         return update
 
+    def _fix_current(self):
+        "Point to newest update file or don't exit"
+        mtimes = []
+        for name in self.list():
+            path = os.path.join(self.dbdir, name)
+            stat = os.stat(path)
+            mtimes.append((stat.st_mtime, name))
+        if mtimes:
+            mtimes.sort(reverse=True)
+            self._reset_link(mtimes[0][1])
+        else:
+            link = self._link_path()
+            try:
+                os.lstat(link)
+            except OSError:
+                pass
+            else:
+                log.debug("deleting broken link %s" % (link))
+                os.unlink(link)
+
+    def delete(self, name):
+        path = self._path(name)
+        if not os.path.exists(path):
+            raise UpdateError("update not found: %s" % (path))
+        os.unlink(path)
+        self._fix_current()
+
 class TicketSource:
 
     def __init__(self, cvesource, cachepath, base, config):
@@ -1286,6 +1313,10 @@ class SecteamTasks:
     def list_updates(self):
         self.open_stuff()
         return self.updates.list()
+
+    def delete_update(self, name):
+        self.open_stuff()
+        self.updates.delete(name)
 
     def init(self):
         path = self.paths.workdir()

@@ -40,6 +40,8 @@ class Kcve(SektCommand):
                 default=False, help="shows an update")
         group.add_option("-e", "--edit", action="store_true",
                 default=False, help="edits an update")
+        group.add_option("-D", "--delete", action="store_true",
+                default=False, help="deletes an update")
         parser.add_option_group(group)
 
         group = optparse.OptionGroup(parser, "Options for --create")
@@ -64,6 +66,8 @@ class Kcve(SektCommand):
             self.list()
         elif self.opts.edit:
             self.edit()
+        elif self.opts.delete:
+            self.delete()
         else:
             # elif self.opts.show:
             self.show()
@@ -77,6 +81,10 @@ class Kcve(SektCommand):
     def list(self):
         for name in self.tasks.list_updates():
             print name
+
+    def delete(self):
+        for name in self.args:
+            self.tasks.delete_update(name)
 
     def show(self):
         for name in self.args:
