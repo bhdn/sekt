@@ -1089,9 +1089,11 @@ class SecteamTasks:
         self.updates = UpdatesTracker(self.paths.updates_dir())
         self.open_stuff = lambda: None
 
-    def pull_cves(self, file=None):
+    def pull_cves(self, file=None, email=False):
         """Pull CVE XMLs from a text stream (usually the one from
         cve.mitre.org)
+
+        @email: skip header stuff from the message before parsing the XML
         """
         from mdv.sec.pullcves import split
         import subprocess
@@ -1099,13 +1101,21 @@ class SecteamTasks:
         # handle proxies easily
         cves = CVEPool(self.paths.cve_database())
         if file:
-            source = open(file)
+            if file == "-":
+                source = sys.stdin
+            else:
+                source = open(file)
         else:
             cmd = "curl --silent '%s' | zcat" % self.config.cves.url
             log.debug("running: %s", cmd)
             p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE)
             source = p.stdout
+        if email:
+            for line in source:
+                line = line.strip()
+                if not line:
+                    break
         chunkgen = (chunk for chunk in split(source))
         for new in cves.pull(chunkgen):
             yield new
