@@ -294,15 +294,15 @@ class CVEPool:
 
     def _get_info(self, cveid):
         self.open()
-        stmt = "SELECT DISTINCT rawhash FROM cve WHERE cve = ?"
+        stmt = "SELECT DISTINCT rawhash, date FROM cve WHERE cve = ?"
         pars = (cveid,)
         self._conn.text_factory = str
         cur = self._conn.cursor()
         try:
-            rawhash, = cur.execute(stmt, pars).next()
+            (rawhash, date) = cur.execute(stmt, pars).next()
         except StopIteration:
             return None
-        info = {"hash": rawhash}
+        info = {"hash": rawhash, "date": date}
         return info
 
     def _set_info(self, cveid, hash=None, changed=None):
@@ -352,7 +352,6 @@ class CVEPool:
         insert = False
         if info:
             if info["hash"] != newhash:
-                self._remove(cveid)
                 insert = True
             else:
                 log.debug("no need to update %s (%s)", cveid, newhash)
@@ -360,9 +359,35 @@ class CVEPool:
             insert = True
         if insert:
             cve = self._get_cve(xml)
-            log.debug("inserting %s %s", cve.cveid, newhash)
-            self._insert(cve, cve.references, newhash)
-            return True
+            insert = True # getting messy
+            if info:
+                try:
+                    newdate = int(cve.date)
+                    olddate = int(info["date"])
+                except ValueError:
+                    pass
+                else:
+                    if newdate > olddate:
+                        insert = True
+                        log.debug("xml is newer than in base (cur=%s vs "
+                                "new=%s)" % (olddate, newdate))
+                    elif newdate == olddate:
+                        if "** RESERVED **" in cve.description:
+                            log.debug("%s: not inserting because newer is "
+                                    "marked as RESERVED" % (cve.cveid))
+                            insert = False
+                        # else insert
+                    else:
+                        log.debug("%s the CVE description being inserted "
+                                "is older than what is already "
+                                "in the base (cur=%s vs new=%s)" %
+                                (cve.cveid, olddate, newdate))
+                        insert = False
+            if insert:
+                log.debug("inserting %s %s", cve.cveid, newhash)
+                self._remove(cveid)
+                self._insert(cve, cve.references, newhash)
+                return True
         return False # not new
 
     def pull(self, chunkgen):
