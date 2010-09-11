@@ -414,8 +414,8 @@ class CVE:
         else:
             references = ""
         dump = "id: %s\ndescription: %s\nstatus: %s\nphase: %s\n"\
-               "%s\n" % (self.cveid, description,
-                       self.status, self.phase, references)
+               "date: %s\n%s\n" % (self.cveid, description,
+                       self.status, self.phase, self.date, references)
         return dump
 
 class Media:
