@@ -977,7 +977,7 @@ class UpdatesTracker:
         path = self._path(name)
         basename = os.path.basename(path)
         link = self._link_path()
-        if os.path.exists(link):
+        if os.path.lexists(link):
             if not os.path.islink(link):
                 raise UpdateError("oops, %s was supposed to be a symlink"
                         % (link))
