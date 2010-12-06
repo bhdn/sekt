@@ -2,7 +2,7 @@
 from distutils.core import setup
 
 setup(name="sekt",
-        version = "0.03",
+        version = "0.04",
         description = "Secteam helper tool",
         author = "Bogdano Arendartchuk",
         author_email = "bogdano@mandriva.com",
