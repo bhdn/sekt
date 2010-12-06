@@ -1329,6 +1329,35 @@ class SecteamTasks:
             update.set_embargo(embargo)
         self.updates.save(update)
 
+    def modify_update(self, name=None, packages=None, distros=None,
+            cves=None, embargo=None):
+        """
+        Modify an existing update
+
+        @name: the task name, optional
+        @packages: list of packages (SRPM) to be bound with the
+                   update
+        @distros: list of distros
+        @cves: list of CVE IDs
+        @embargo: a struct_time object or unix time with the embargo limit
+        date.
+        """
+        self.open_stuff()
+        #FIXME merge the common code with create_update
+        update = self.updates.get(name)
+        if packages:
+            for package in packages:
+                update.bind_package(package)
+        if distros:
+            for distro in distros:
+                update.bind_distro(distro)
+        if cves:
+            for cveid in cves:
+                update.bind_cveid(cveid)
+        if embargo:
+            update.set_embargo(embargo)
+        self.updates.save(update)
+
     def dump_update(self, name):
         self.open_stuff()
         update = self.updates.get(name)

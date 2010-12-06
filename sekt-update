@@ -15,6 +15,9 @@ All this information is then used to perform real actions regarding the
 update, such as generating the advisory text, opening the ticket, etc.
 
 So far, it only can create "updates" and bind some information on it.
+
+When --edit receives no options besides the update name, it will open an
+editor with the raw update file.
 """
 
 USAGE = """
@@ -44,11 +47,12 @@ class Kcve(SektCommand):
                 default=False, help="deletes an update")
         parser.add_option_group(group)
 
-        group = optparse.OptionGroup(parser, "Options for --create")
+        group = optparse.OptionGroup(parser, "Options for --create and "
+                "--edit")
         group.add_option("-p", "--package", type="string", metavar="PKGNAME",
                 help="associate a package with the update")
-        group.add_option("-d", "--distro", type="string", metavar="DISTRO",
-                help="distro version")
+        group.add_option("-d", "--distro", default=[], metavar="DISTRO",
+                help="distro version", action="append")
         group.add_option("-C", "--cve", type="string", metavar="CVEID",
                 help="a CVE number")
         group.add_option("-t", "--ticket", type="string",
@@ -92,29 +96,37 @@ class Kcve(SektCommand):
 
     def edit(self):
         for name in self.args:
-            raw = self.tasks.dump_update(name)
-            tf = tempfile.NamedTemporaryFile(prefix="sekt-update-",
-                    suffix=".conf")
-            tf.write("# be aware that CVEs, package names and dates will "
-                    "not be checked now\n")
-            tf.write(raw)
-            tf.flush()
-            oldstat = os.stat(tf.name)
-            editor = (os.getenv("SEKT_VISUAL") or os.getenv("VISUAL") or
-                    os.getenv("EDITOR", "vi"))
-            cmd = subprocess.list2cmdline([editor, tf.name])
-            ret = os.system(cmd)
-            tf.seek(0)
-            raw = tf.read()
-            if ret != 0:
-                raise Error("editor command failed with %d: %s" %
-                        (ret, cmd))
-            newstat = os.stat(tf.name)
-            if newstat.st_mtime > oldstat.st_mtime:
-                self.tasks.save_update(name, raw)
-                print "Update saved."
+            if any((self.opts.package, self.opts.distro, self.opts.cve,
+                    self.opts.embargo)):
+                # wants to perform inline edit
+                self.tasks.modify_update(name, packages=self.opts.package,
+                        distros=self.opts.distro, cves=self.opts.cve,
+                        embargo=self.opts.embargo)
             else:
-                print "No changes in update."
+                # open a visual editor
+                raw = self.tasks.dump_update(name)
+                tf = tempfile.NamedTemporaryFile(prefix="sekt-update-",
+                        suffix=".conf")
+                tf.write("# be aware that CVEs, package names and dates will "
+                        "not be checked now\n")
+                tf.write(raw)
+                tf.flush()
+                oldstat = os.stat(tf.name)
+                editor = (os.getenv("SEKT_VISUAL") or os.getenv("VISUAL") or
+                        os.getenv("EDITOR", "vi"))
+                cmd = subprocess.list2cmdline([editor, tf.name])
+                ret = os.system(cmd)
+                tf.seek(0)
+                raw = tf.read()
+                if ret != 0:
+                    raise Error("editor command failed with %d: %s" %
+                            (ret, cmd))
+                newstat = os.stat(tf.name)
+                if newstat.st_mtime > oldstat.st_mtime:
+                    self.tasks.save_update(name, raw)
+                    print "Update saved."
+                else:
+                    print "No changes in update."
 
 Kcve().main()
 # vim:ts=4:sw=4:et
