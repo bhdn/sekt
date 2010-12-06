@@ -625,7 +625,8 @@ class PackagePool:
         raise NotImplementedError
 
     def close(self):
-        self._conn.close()
+        if self._conn:
+            self._conn.close()
 
 class KernelTreePool:
 
