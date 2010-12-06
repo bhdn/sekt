@@ -1,2 +1,2 @@
 recursive-include mdv/ *.py
-include tour.txt
+include tour.txt ideas.txt

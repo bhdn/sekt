@@ -31,7 +31,8 @@ setup(name="sekt",
         ],
         data_files = [
             ('/usr/share/doc/sekt/',
-                ['tour.txt'] ),]
+                ['tour.txt',
+                 'ideas.txt'] ),]
     )
 
 
